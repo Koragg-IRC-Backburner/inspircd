@@ -42,7 +42,7 @@ class CommandSetname : public Command
 
 		if (user->ChangeRealName(parameters[0]))
 		{
-			ServerInstance->SNO->WriteGlobalSno('a', "%s used SETNAME to change their real name to '%s'", user->nick.c_str(), parameters[0].c_str());
+			ServerInstance->SNO->WriteGlobalSno('s', "%s used SETNAME to change their real name to '%s'", user->nick.c_str(), parameters[0].c_str());
 		}
 
 		return CMD_SUCCESS;
