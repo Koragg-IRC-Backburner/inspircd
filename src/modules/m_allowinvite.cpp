@@ -24,7 +24,7 @@
 class AllowInvite : public SimpleChannelModeHandler
 {
  public:
-	AllowInvite(Module* Creator) : SimpleChannelModeHandler(Creator, "allowinvite", 'A') { }
+	AllowInvite(Module* Creator) : SimpleChannelModeHandler(Creator, "allowinvite", 'g') { }
 };
 
 class ModuleAllowInvite : public Module
@@ -45,21 +45,21 @@ class ModuleAllowInvite : public Module
 
 	virtual void On005Numeric(std::string &output)
 	{
-		ServerInstance->AddExtBanChar('A');
+		ServerInstance->AddExtBanChar('g');
 	}
 
 	virtual ModResult OnUserPreInvite(User* user,User* dest,Channel* channel, time_t timeout)
 	{
 		if (IS_LOCAL(user))
 		{
-			ModResult res = channel->GetExtBanStatus(user, 'A');
+			ModResult res = channel->GetExtBanStatus(user, 'g');
 			if (res == MOD_RES_DENY)
 			{
 				// Matching extban, explicitly deny /invite
 				user->WriteNumeric(ERR_CHANOPRIVSNEEDED, "%s %s :You are banned from using INVITE", user->nick.c_str(), channel->name.c_str());
 				return res;
 			}
-			if (channel->IsModeSet('A') || res == MOD_RES_ALLOW)
+			if (channel->IsModeSet('g') || res == MOD_RES_ALLOW)
 			{
 				// Explicitly allow /invite
 				return MOD_RES_ALLOW;
@@ -75,7 +75,7 @@ class ModuleAllowInvite : public Module
 
 	virtual Version GetVersion()
 	{
-		return Version("Provides support for channel mode +A, allowing /invite freely on a channel and extban A to deny specific users it",VF_VENDOR);
+		return Version("Provides support for channel mode +g, allowing /invite freely on a channel and extban A to deny specific users it",VF_VENDOR);
 	}
 };
 
