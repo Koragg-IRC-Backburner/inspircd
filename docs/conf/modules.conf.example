@@ -1933,3 +1933,37 @@
 #
 #<module name="m_spanningtree.so">
 <module name="m_quietban.so">
+<module name="m_antirandom.so">
+<antirandom
+  showfailedconnects="1"
+  debugmode="0"
+  threshold="10"
+  banaction="KILL"
+  banduration="86400"
+  banreason="You look like a bot. Change your nick/ident/gecos and try reconnecting.">
+<antirandomexempt type="host" pattern="109.169.31.4">
+<antirandomexempt type="host" pattern="107.161.19.53">
+<antirandomexempt type="host" pattern="107.161.19.109">
+<antirandomexempt type="host" pattern="54.38.157.219">
+<antirandomexempt type="host" pattern="*aerospacechat.com">
+<antirandomexempt type="host" pattern="2001:41d0:701:1100::17b7">
+<antirandomexempt type="host" pattern="127.0.0.1">
+<antirandomexempt type="host" pattern="0::1">
+<antirandomexempt type="host" pattern="localhost">
+<antirandomexempt type="host" pattern="2001:67c:2f08::/48">
+<antirandomexempt type="host" pattern="*highgate.irccloud.com">
+<antirandomexempt type="host" pattern="*ealing.irccloud.com">
+<antirandomexempt type="host" pattern="*charlton.irccloud.com">
+<antirandomexempt type="host" pattern="*brockwell.irccloud.com">
+<antirandomexempt type="host" pattern="*tooting.irccloud.com">
+<antirandomexempt type="host" pattern="*hathersage.irccloud.com">
+<antirandomexempt type="host" pattern="*stonehaven.irccloud.com">
+<antirandomexempt type="host" pattern="192.184.9.108">
+<antirandomexempt type="host" pattern="192.184.9.110">
+<antirandomexempt type="host" pattern="192.184.9.112">
+<antirandomexempt type="host" pattern="192.184.10.118">
+<antirandomexempt type="host" pattern="192.184.10.9">
+<antirandomexempt type="host" pattern="192.184.8.73">
+<antirandomexempt type="host" pattern="192.184.8.103">
+<modulae name="m_autodrop.so">
+<autodrop commands="CONNECT DELETE GET HEAD OPTIONS PATCH POST PUT TRACE">
