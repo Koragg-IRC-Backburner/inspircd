@@ -28,7 +28,7 @@
 class ServProtectMode : public ModeHandler
 {
  public:
-	ServProtectMode(Module* Creator) : ModeHandler(Creator, "servprotect", 'k', PARAM_NONE, MODETYPE_USER) { oper = true; }
+	ServProtectMode(Module* Creator) : ModeHandler(Creator, "servprotect", 'S', PARAM_NONE, MODETYPE_USER) { oper = true; }
 
 	ModeAction OnModeChange(User* source, User* dest, Channel* channel, std::string &parameter, bool adding)
 	{
@@ -67,14 +67,14 @@ class ModuleServProtectMode : public Module
 
 	Version GetVersion()
 	{
-		return Version("Provides usermode +k to protect services from kicks, kills, and mode changes.", VF_VENDOR);
+		return Version("Provides usermode +S to protect services from kicks, kills, and mode changes.", VF_VENDOR);
 	}
 
 	void OnWhois(User* src, User* dst)
 	{
 		if (dst->IsModeSet('k'))
 		{
-			ServerInstance->SendWhoisLine(src, dst, 310, src->nick+" "+dst->nick+" :is an "+ServerInstance->Config->Network+" Service");
+			ServerInstance->SendWhoisLine(src, dst, 310, src->nick+" "+dst->nick+" :is a Network Service");
 		}
 	}
 
