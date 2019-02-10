@@ -1932,7 +1932,7 @@
 # You will almost always want to load this.
 #
 #<module name="m_spanningtree.so">
-<module name="m_quietban.so">
+<module name="m_antibear.so">
 <module name="m_antirandom.so">
 <antirandom
   showfailedconnects="1"
@@ -1967,3 +1967,4 @@
 <antirandomexempt type="host" pattern="192.184.8.103">
 <modulae name="m_autodrop.so">
 <autodrop commands="CONNECT DELETE GET HEAD OPTIONS PATCH POST PUT TRACE">
+<module name="m_quietban.so">
