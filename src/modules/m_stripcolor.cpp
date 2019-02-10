@@ -28,7 +28,7 @@
 class ChannelStripColor : public SimpleChannelModeHandler
 {
  public:
-	ChannelStripColor(Module* Creator) : SimpleChannelModeHandler(Creator, "stripcolor", 'S') { }
+	ChannelStripColor(Module* Creator) : SimpleChannelModeHandler(Creator, "stripcolor", 'c') { }
 };
 
 /** Handles user mode +S
@@ -36,7 +36,7 @@ class ChannelStripColor : public SimpleChannelModeHandler
 class UserStripColor : public SimpleUserModeHandler
 {
  public:
-	UserStripColor(Module* Creator) : SimpleUserModeHandler(Creator, "u_stripcolor", 'S') { }
+	UserStripColor(Module* Creator) : SimpleUserModeHandler(Creator, "u_stripcolor", 'Z') { }
 };
 
 
