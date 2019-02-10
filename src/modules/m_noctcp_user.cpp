@@ -47,7 +47,7 @@ public:
 
 	virtual Version GetVersion()
 	{
-		return Version("Provides user mode +T to block CTCPs");
+		return Version("Provides user mode +C to block CTCPs");
 	}
 
 	virtual ModResult OnUserPreMessage(User* user,void* dest,int target_type, std::string &text, char status, CUList &exempt_list)
@@ -55,7 +55,7 @@ public:
 		if ((target_type == TYPE_USER) && (IS_LOCAL(user)))
 		{
 			User* target = static_cast<User*>(dest);
-			if (!target->IsModeSet('T'))
+			if (!target->IsModeSet('C'))
 				return MOD_RES_PASSTHRU;
 
 			if (operoverride && IS_OPER(user))
