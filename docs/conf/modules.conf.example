@@ -1322,7 +1322,9 @@
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Override module: Adds support for oper override.
 # This module is oper-only.
-#<module name="m_override.so">
+<module name="m_override.so">
+<override noisy="yes" requirekey="yes" umodeexpire="30m" expiremsg="Oper override mode (+p) has expired." snoonset="yes" snoonunset="yes" snoonexpire="yes">
+
 #
 #-#-#-#-#-#-#-#-#-#-#   OVERRIDE CONFIGURATION   -#-#-#-#-#-#-#-#-#-#-#
 #                                                                     #
@@ -1969,4 +1971,5 @@
 <autodrop commands="CONNECT DELETE GET HEAD OPTIONS PATCH POST PUT TRACE">
 <module name="m_no_ctcp_user.so">
 <noctcpuser operoverride="yes">
+<module name="m_override_umode.so">
 <module name="m_quietban.so">
