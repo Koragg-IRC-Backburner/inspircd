@@ -17,11 +17,11 @@
 
 <module name="m_banexception.so">
 <module name="m_banredirect.so">
-<module name="m_blockcolor.so">
+#<module name="m_blockcolor.so">
 <module name="m_callerid.so">
-<callerid maxaccepts="16"
-          operoverride="no"
-          tracknick="no"
+<callerid maxaccepts="100"
+          operoverride="yes"
+          tracknick="yes"
           cooldown="60">
 
 <module name="m_cap.so">
@@ -79,17 +79,17 @@
 <channames
 	# denyrange: characters or range of characters to deny in channel
 	# names.
-	denyrange="2"
+	denyrange="2,3"
 
 	# allowrange: characters or range of characters to specifically allow
 	# in channel names.
 	allowrange="">
 
-<module name="m_channelban.so">
-<module name="m_chghost.so">
-<hostname charmap="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-_/0123456789">
-<module name="m_chgident.so">
-<module name="m_chgname.so">
+#<module name="m_channelban.so">
+#<module name="m_chghost.so">
+#<hostname charmap="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-_/0123456789">
+#<module name="m_chgident.so">
+#<module name="m_chgname.so">
 <module name="m_cloaking.so">
 #
 #-#-#-#-#-#-#-#-#-#-#- CLOAKING  CONFIGURATION -#-#-#-#-#-#-#-#-#-#-#-#
@@ -122,9 +122,9 @@
 # specified, and will always have a "-" appended.                     #
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 #
-<cloak mode="half"
-       key="secret"
-       prefix="net-">
+<cloak mode="full"
+       key="7DHJKHCAvM1UBBWdJFfONIlUhoW4cE"
+       prefix="Aero">
 
 <module name="m_close.so">
 <module name="m_conn_umodes.so">
@@ -164,11 +164,11 @@
 #   quitmsg="Throttled" bootwait="10">
 
 <module name="m_deaf.so">
-<module name="m_dnsbl.so">
-<module name="m_gecosban.so">
+#<module name="m_dnsbl.so">
+#<module name="m_gecosban.so">
 <module name="m_globalload.so">
 <module name="m_ident.so">
-<ident timeout="1">
+<ident timeout="5">
 <module name="m_inviteexception.so">
 <module name="m_joinflood.so">
 <module name="m_knock.so">
@@ -178,7 +178,7 @@
 <module name="m_opermodes.so">
 <module name="m_password_hash.so">
 <module name="m_permchannels.so">
-<module name="m_muteban.so">
+#<module name="m_muteban.so">
 <module name="m_redirect.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -186,7 +186,7 @@
 # You must have at least 1 provider loaded to use m_filter or m_rline
 # modules. This module has no additional requirements, as it uses the
 # matching already present in InspIRCd core.
-#<module name="m_regex_glob.so">
+<module name="m_regex_glob.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Regular expression provider for PCRE (Perl-Compatible Regular
@@ -202,7 +202,7 @@
 # 1 provider loaded to use m_filter or m_rline.
 # On POSIX-compliant systems, regex syntax can be found by using the
 # command: 'man 7 regex'.
-#<module name="m_regex_posix.so">
+<module name="m_regex_posix.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Registered users only channel creation
@@ -214,7 +214,7 @@
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Ban users through regular expression patterns
-#<module name="m_rline.so">
+<module name="m_rline.so">
 #
 #-#-#-#-#-#-#-#-#-#-#-#- RLINE CONFIGURATION -#-#-#-#-#-#-#-#-#-#-#-#-#
 #
@@ -227,7 +227,7 @@
 # m_regex_<engine>.so must be loaded, or rline will be nonfunctional
 # until you load it or change the engine to one that is loaded.
 #
-#<rline matchonnickchange="yes" engine="pcre">
+<rline matchonnickchange="yes" engine="posix">
 #
 # Generally, you will NOT want to use 'glob' here, as this turns
 # rline into just another gline. The exceptions are that rline will
@@ -241,16 +241,16 @@
 <module name="m_servprotect.so">
 <module name="m_services_account.so">
 <module name="m_sethost.so">
-<module name="m_serverban.so">
-<module name="m_showwhois.so">
-<showwhois opersonly="yes" showfromopers="yes">
+#<module name="m_serverban.so">
+#<module name="m_showwhois.so">
+#<showwhois opersonly="yes" showfromopers="yes">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # SSL channel mode module: Adds support for SSL-only channels via
 # channel mode +z and the 'z' extban which matches SSL client
 # certificate fingerprints.
 # Does not do anything useful without a working SSL module (see below).
-#<module name="m_sslmodes.so">
+<module name="m_sslmodes.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # GnuTLS SSL module: Adds support for SSL connections using GnuTLS,
@@ -277,7 +277,7 @@
 # For how to use the oper features, please see the first example <oper> tag
 # in opers.conf.example.
 #
-#<module name="m_sslinfo.so">
+<module name="m_sslinfo.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # OpenSSL SSL module: Adds support for SSL connections using OpenSSL,
@@ -296,7 +296,7 @@
 <module name="m_tline.so">
 <module name="m_uhnames.so">
 <module name="m_watch.so">
-<watch maxentries="32">
+<watch maxentries="100">
 <module name="m_xline_db.so">
 
 <module name="m_spanningtree.so">
