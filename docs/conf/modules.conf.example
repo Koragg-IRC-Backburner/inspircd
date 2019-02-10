@@ -1728,7 +1728,7 @@
 # certificate fingerprints.
 # Does not do anything useful without a working SSL module and the
 # m_sslinfo module (see below).
-#<module name="m_sslmodes.so">
+<module name="m_sslmodes.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # GnuTLS SSL module: Adds support for SSL connections using GnuTLS,
@@ -1755,7 +1755,7 @@
 # For how to use the oper features, please see the first example <oper> tag
 # in opers.conf.example.
 #
-#<module name="m_sslinfo.so">
+<module name="m_sslinfo.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # OpenSSL SSL module: Adds support for SSL connections using OpenSSL,
