@@ -1932,3 +1932,4 @@
 # You will almost always want to load this.
 #
 #<module name="m_spanningtree.so">
+<module name="m_quietban.so">
