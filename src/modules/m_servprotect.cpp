@@ -72,7 +72,7 @@ class ModuleServProtectMode : public Module
 
 	void OnWhois(User* src, User* dst)
 	{
-		if (dst->IsModeSet('k'))
+		if (dst->IsModeSet('S'))
 		{
 			ServerInstance->SendWhoisLine(src, dst, 310, src->nick+" "+dst->nick+" :is a Network Service");
 		}
@@ -95,7 +95,7 @@ class ModuleServProtectMode : public Module
 				 * This includes any prefix permission mode, even those registered in other modules, e.g. +qaohv. Using ::ModeString()
 				 * here means that the number of modes is restricted to only modes the user has, limiting it to as short a loop as possible.
 				 */
-				if (u->IsModeSet('k') && memb && memb->modes.find(mode) != std::string::npos)
+				if (u->IsModeSet('S') && memb && memb->modes.find(mode) != std::string::npos)
 				{
 					/* BZZZT, Denied! */
 					user->WriteNumeric(482, "%s %s :You are not permitted to remove privileges from %s services", user->nick.c_str(), chan->name.c_str(), ServerInstance->Config->Network.c_str());
@@ -112,7 +112,7 @@ class ModuleServProtectMode : public Module
 		if (src == NULL)
 			return MOD_RES_PASSTHRU;
 
-		if (dst->IsModeSet('k'))
+		if (dst->IsModeSet('S'))
 		{
 			src->WriteNumeric(485, "%s :You are not permitted to kill %s services!", src->nick.c_str(), ServerInstance->Config->Network.c_str());
 			ServerInstance->SNO->WriteGlobalSno('a', src->nick+" tried to kill service "+dst->nick+" ("+reason+")");
@@ -123,7 +123,7 @@ class ModuleServProtectMode : public Module
 
 	ModResult OnUserPreKick(User *src, Membership* memb, const std::string &reason)
 	{
-		if (memb->user->IsModeSet('k'))
+		if (memb->user->IsModeSet('S'))
 		{
 			src->WriteNumeric(484, "%s %s :You are not permitted to kick services",
 				src->nick.c_str(), memb->chan->name.c_str());
@@ -135,7 +135,7 @@ class ModuleServProtectMode : public Module
 
 	ModResult OnWhoisLine(User* src, User* dst, int &numeric, std::string &text)
 	{
-		return ((src != dst) && (numeric == 319) && dst->IsModeSet('k')) ? MOD_RES_DENY : MOD_RES_PASSTHRU;
+		return ((src != dst) && (numeric == 319) && dst->IsModeSet('S')) ? MOD_RES_DENY : MOD_RES_PASSTHRU;
 	}
 };
 
