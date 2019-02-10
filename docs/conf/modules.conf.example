@@ -1454,8 +1454,8 @@
 # This also breaks linking to servers that do not have the option.    #
 # This defaults to false for the 2.0 version, it will be enabled in   #
 # all the future versions.                                            #
-#<module name="m_redirect.so">
-#<redirect antiredirect="true">
+<module name="m_redirect.so">
+<redirect antiredirect="true">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Regular expression provider for glob or wildcard (?/*) matching.
