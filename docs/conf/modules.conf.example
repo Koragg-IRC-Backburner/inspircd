@@ -996,7 +996,7 @@
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Knock module: Adds the /KNOCK command and channel mode +K.
-#<module name="m_knock.so">
+<module name="m_knock.so">
 #
 # This setting specifies what to do when someone successfully /KNOCKs.
 # If set to "notice", then a NOTICE will be sent to the channel.
