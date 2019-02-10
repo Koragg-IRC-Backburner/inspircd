@@ -696,7 +696,7 @@
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Deaf module: Adds support for the usermode +d - deaf to channel
 # messages and channel notices.
-#<module name="m_deaf.so">
+<module name="m_deaf.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Delay join module: Adds the channel mode +D which delays all JOIN
@@ -856,18 +856,18 @@
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Hide chans module: Allows users to hide their channels list from non-
 # opers by setting user mode +I on themselves.
-#<module name="m_hidechans.so">
+<module name="m_hidechans.so">
 #
 # This mode can optionally prevent opers from seeing channels on a +I
 # user, for more privacy if set to true.
 # This setting is not recommended for most mainstream networks.
-#<hidechans affectsopers="false">
+<hidechans affectsopers="false">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Hide oper module: Allows opers to hide their oper status from non-
 # opers by setting user mode +H on themselves.
 # This module is oper-only.
-#<module name="m_hideoper.so">
+<module name="m_hideoper.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Hostchange module: Allows a different style of cloaking.
@@ -1639,7 +1639,7 @@
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Servprotect module: Provides support for Austhex style +k /
 # UnrealIRCD +S services mode.
-#<module name="m_servprotect.so">
+<module name="m_servprotect.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # See nicks module: Adds snomask +n and +N which show local and remote
@@ -1666,7 +1666,7 @@
 # +b R: (stop matching account names from joining)
 # +b U:n!u@h (blocks matching unregistered users)
 #
-#<module name="m_services_account.so">
+<module name="m_services_account.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Sethost module: Adds the /SETHOST command.
