@@ -64,7 +64,7 @@ class ModuleStripColor : public Module
 
 	virtual void On005Numeric(std::string &output)
 	{
-		ServerInstance->AddExtBanChar('S');
+		ServerInstance->AddExtBanChar('c');
 	}
 
 	virtual ModResult OnUserPreMessage(User* user,void* dest,int target_type, std::string &text, char status, CUList &exempt_list)
@@ -76,7 +76,7 @@ class ModuleStripColor : public Module
 		if (target_type == TYPE_USER)
 		{
 			User* t = (User*)dest;
-			active = t->IsModeSet('S');
+			active = t->IsModeSet('Z');
 		}
 		else if (target_type == TYPE_CHANNEL)
 		{
@@ -86,7 +86,7 @@ class ModuleStripColor : public Module
 			if (res == MOD_RES_ALLOW)
 				return MOD_RES_PASSTHRU;
 
-			active = !t->GetExtBanStatus(user, 'S').check(!t->IsModeSet('S'));
+			active = !t->GetExtBanStatus(user, 'c').check(!t->IsModeSet('c'));
 		}
 
 		if (active)
