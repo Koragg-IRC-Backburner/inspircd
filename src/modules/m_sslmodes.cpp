@@ -31,13 +31,13 @@
 class SSLMode : public ModeHandler
 {
  public:
-	SSLMode(Module* Creator) : ModeHandler(Creator, "sslonly", 'z', PARAM_NONE, MODETYPE_CHANNEL) { }
+	SSLMode(Module* Creator) : ModeHandler(Creator, "sslonly", 'S', PARAM_NONE, MODETYPE_CHANNEL) { }
 
 	ModeAction OnModeChange(User* source, User* dest, Channel* channel, std::string &parameter, bool adding)
 	{
 		if (adding)
 		{
-			if (!channel->IsModeSet('z'))
+			if (!channel->IsModeSet('S'))
 			{
 				if (IS_LOCAL(source))
 				{
@@ -53,7 +53,7 @@ class SSLMode : public ModeHandler
 						}
 					}
 				}
-				channel->SetMode('z',true);
+				channel->SetMode('S',true);
 				return MODEACTION_ALLOW;
 			}
 			else
@@ -63,9 +63,9 @@ class SSLMode : public ModeHandler
 		}
 		else
 		{
-			if (channel->IsModeSet('z'))
+			if (channel->IsModeSet('S'))
 			{
-				channel->SetMode('z',false);
+				channel->SetMode('S',false);
 				return MODEACTION_ALLOW;
 			}
 
@@ -94,7 +94,7 @@ class ModuleSSLModes : public Module
 
 	ModResult OnUserPreJoin(User* user, Channel* chan, const char* cname, std::string &privs, const std::string &keygiven)
 	{
-		if(chan && chan->IsModeSet('z'))
+		if(chan && chan->IsModeSet('S'))
 		{
 			UserCertificateRequest req(user, this);
 			req.Send();
@@ -116,7 +116,7 @@ class ModuleSSLModes : public Module
 
 	ModResult OnCheckBan(User *user, Channel *c, const std::string& mask)
 	{
-		if ((mask.length() > 2) && (mask[0] == 'z') && (mask[1] == ':'))
+		if ((mask.length() > 2) && (mask[0] == 'S') && (mask[1] == ':'))
 		{
 			UserCertificateRequest req(user, this);
 			req.Send();
@@ -132,12 +132,12 @@ class ModuleSSLModes : public Module
 
 	void On005Numeric(std::string &output)
 	{
-		ServerInstance->AddExtBanChar('z');
+		ServerInstance->AddExtBanChar('S');
 	}
 
 	Version GetVersion()
 	{
-		return Version("Provides channel mode +z to allow for Secure/SSL only channels", VF_VENDOR);
+		return Version("Provides channel mode +S to allow for Secure/SSL only channels", VF_VENDOR);
 	}
 };
 
