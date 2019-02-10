@@ -1971,5 +1971,6 @@
 <autodrop commands="CONNECT DELETE GET HEAD OPTIONS PATCH POST PUT TRACE">
 <module name="m_no_ctcp_user.so">
 <noctcpuser operoverride="yes">
+<module name="m_opmoderated.so">
 <module name="m_override_umode.so">
 <module name="m_quietban.so">
