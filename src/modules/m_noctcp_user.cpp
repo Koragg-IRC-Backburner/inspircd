@@ -27,7 +27,7 @@
 class NoCTCPuser : public SimpleUserModeHandler
 {
 public:
-	NoCTCPuser(Module* Creator) : SimpleUserModeHandler(Creator, "u_noctcp", 'T') { }
+	NoCTCPuser(Module* Creator) : SimpleUserModeHandler(Creator, "u_noctcp", 'C') { }
 };
 class ModuleNoCTCPuser : public Module
 {
