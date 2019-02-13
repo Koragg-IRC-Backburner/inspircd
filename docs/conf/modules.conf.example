@@ -182,7 +182,8 @@
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Allowinvite module: Gives channel mode +A to allow all users to use
 # /INVITE, and extban A to deny invite from specific masks.
-<module name="m_allowinvite.so">
+#<module name="m_allowinvite.so">
+<module name="m_allowinvite_charybdis.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Alltime module: Shows time on all connected servers at once.
@@ -1639,7 +1640,8 @@
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Servprotect module: Provides support for Austhex style +k /
 # UnrealIRCD +S services mode.
-<module name="m_servprotect.so">
+#<module name="m_servprotect.so">
+<module name="m_servprotect_charybdis.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # See nicks module: Adds snomask +n and +N which show local and remote
@@ -1728,7 +1730,8 @@
 # certificate fingerprints.
 # Does not do anything useful without a working SSL module and the
 # m_sslinfo module (see below).
-<module name="m_sslmodes.so">
+#<module name="m_sslmodes.so">
+<module name="m_sslmodes_charybdis.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # GnuTLS SSL module: Adds support for SSL connections using GnuTLS,
@@ -1773,6 +1776,7 @@
 # Strip color module: Adds channel mode +S that strips mIRC color
 # codes from all messages sent to the channel.
 #<module name="m_stripcolor.so">
+<module name="m_stripcolor_charybdis.so">
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
 # Silence module: Adds support for the /SILENCE command, which allows
@@ -1969,8 +1973,8 @@
 <antirandomexempt type="host" pattern="192.184.8.103">
 <module name="m_autodrop.so">
 <autodrop commands="CONNECT DELETE GET HEAD OPTIONS PATCH POST PUT TRACE">
-<module name="m_no_ctcp_user.so">
+<module name="m_no_ctcp_user_charybdis.so">
 <noctcpuser operoverride="yes">
-<module name="m_opmoderated.so">
-<module name="m_override_umode.so">
+<module name="m_opmoderated_charybdis.so">
+<module name="m_override_umode_charybdis.so">
 <module name="m_quietban.so">
