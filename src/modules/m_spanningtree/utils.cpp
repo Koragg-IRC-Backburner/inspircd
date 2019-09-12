@@ -28,7 +28,6 @@
 #include "treesocket.h"
 #include "resolvers.h"
 #include "commandbuilder.h"
-#include "modules/server.h"
 
 SpanningTreeUtilities* Utils = NULL;
 
@@ -171,7 +170,7 @@ void SpanningTreeUtilities::GetListOfServersForChannel(Channel* c, TreeSocketSet
 	for (TreeServer::ChildServers::const_iterator i = children.begin(); i != children.end(); ++i)
 	{
 		ModResult result;
-		FIRST_MOD_RESULT_CUSTOM(Creator->GetEventProvider(), ServerEventListener, OnBroadcastMessage, result, (c, *i));
+		FIRST_MOD_RESULT_CUSTOM(Creator->GetBroadcastEventProvider(), ServerProtocol::BroadcastEventListener, OnBroadcastMessage, result, (c, *i));
 		if (result == MOD_RES_ALLOW)
 			list.insert((*i)->GetSocket());
 	}
@@ -258,13 +257,12 @@ void SpanningTreeUtilities::ReadConfiguration()
 	{
 		ConfigTag* tag = i->second;
 		reference<Link> L = new Link(tag);
-		std::string linkname = tag->getString("name");
-		L->Name = linkname.c_str();
 
 		irc::spacesepstream sep = tag->getString("allowmask");
 		for (std::string s; sep.GetToken(s);)
 			L->AllowMasks.push_back(s);
 
+		L->Name = tag->getString("name");
 		L->IPAddr = tag->getString("ipaddr");
 		L->Port = tag->getUInt("port", 0);
 		L->SendPass = tag->getString("sendpass", tag->getString("password"));
@@ -303,7 +301,7 @@ void SpanningTreeUtilities::ReadConfiguration()
 			ServerInstance->Logs->Log(MODNAME, LOG_DEFAULT, "Configuration warning: Link block '" + L->Name + "' has no IP defined! This will allow any IP to connect as this server, and MAY not be what you want.");
 		}
 
-		if (!L->Port)
+		if (!L->Port && L->IPAddr.find('/') == std::string::npos)
 			ServerInstance->Logs->Log(MODNAME, LOG_DEFAULT, "Configuration warning: Link block '" + L->Name + "' has no port defined, you will not be able to /connect it.");
 
 		L->Fingerprint.erase(std::remove(L->Fingerprint.begin(), L->Fingerprint.end(), ':'), L->Fingerprint.end());
@@ -352,9 +350,9 @@ Link* SpanningTreeUtilities::FindLink(const std::string& name)
 	return NULL;
 }
 
-void SpanningTreeUtilities::SendChannelMessage(const std::string& prefix, Channel* target, const std::string& text, char status, const ClientProtocol::TagMap& tags, const CUList& exempt_list, const char* message_type, TreeSocket* omit)
+void SpanningTreeUtilities::SendChannelMessage(User* source, Channel* target, const std::string& text, char status, const ClientProtocol::TagMap& tags, const CUList& exempt_list, const char* message_type, TreeSocket* omit)
 {
-	CmdBuilder msg(prefix, message_type);
+	CmdBuilder msg(source, message_type);
 	msg.push_tags(tags);
 	msg.push_raw(' ');
 	if (status != 0)

@@ -26,14 +26,14 @@ class CommandSATopic : public Command
  public:
 	CommandSATopic(Module* Creator) : Command(Creator,"SATOPIC", 2, 2)
 	{
-		flags_needed = 'o'; syntax = "<target> <topic>";
+		flags_needed = 'o'; syntax = "<channel> :<topic>";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
 	{
 		/*
 		 * Handles a SATOPIC request. Notifies all +s users.
-	 	 */
+		 */
 		Channel* target = ServerInstance->FindChan(parameters[0]);
 
 		if(target)
@@ -69,7 +69,7 @@ class ModuleSATopic : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides a SATOPIC command", VF_VENDOR);
+		return Version("Provides the SATOPIC command", VF_VENDOR);
 	}
 };
 

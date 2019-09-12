@@ -26,12 +26,13 @@ ModeChannelLimit::ModeChannelLimit(Module* Creator)
 	: ParamMode<ModeChannelLimit, LocalIntExt>(Creator, "limit", 'l')
 	, minlimit(0)
 {
+	syntax = "<limit>";
 }
 
 bool ModeChannelLimit::ResolveModeConflict(std::string &their_param, const std::string &our_param, Channel*)
 {
 	/* When TS is equal, the higher channel limit wins */
-	return (atoi(their_param.c_str()) < atoi(our_param.c_str()));
+	return ConvToNum<intptr_t>(their_param) < ConvToNum<intptr_t>(our_param);
 }
 
 ModeAction ModeChannelLimit::OnSet(User* user, Channel* chan, std::string& parameter)

@@ -28,7 +28,7 @@ class CommandSapart : public Command
  public:
 	CommandSapart(Module* Creator) : Command(Creator,"SAPART", 2, 3)
 	{
-		flags_needed = 'o'; syntax = "<nick> <channel>[,<channel>] [reason]";
+		flags_needed = 'o'; syntax = "<nick> <channel>[,<channel>]+ [:<reason>]";
 		TRANSLATE3(TR_NICK, TR_TEXT, TR_TEXT);
 	}
 
@@ -48,7 +48,7 @@ class CommandSapart : public Command
 
 			if (dest->server->IsULine())
 			{
-				user->WriteNumeric(ERR_NOPRIVILEGES, "Cannot use an SA command on a u-lined client");
+				user->WriteNumeric(ERR_NOPRIVILEGES, "Cannot use an SA command on a U-lined client");
 				return CMD_FAILURE;
 			}
 
@@ -96,7 +96,7 @@ class ModuleSapart : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides command SAPART to force-part users from a channel.", VF_OPTCOMMON | VF_VENDOR);
+		return Version("Provides the SAPART command, allows opers to force-part users from channels", VF_OPTCOMMON | VF_VENDOR);
 	}
 };
 

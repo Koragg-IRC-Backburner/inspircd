@@ -26,16 +26,19 @@
 /// $LinkerFlags: find_linker_flags("gnutls" "-lgnutls")
 /// $LinkerFlags: require_version("gnutls" "1.0" "2.12") execute("libgcrypt-config --libs" "LIBGCRYPT_LDFLAGS")
 
+/// $PackageInfo: require_system("arch") gnutls pkgconf
 /// $PackageInfo: require_system("centos") gnutls-devel pkgconfig
 /// $PackageInfo: require_system("darwin") gnutls pkg-config
-/// $PackageInfo: require_system("debian" "1.0" "7.99") libgcrypt11-dev
 /// $PackageInfo: require_system("debian") gnutls-bin libgnutls28-dev pkg-config
-/// $PackageInfo: require_system("ubuntu" "1.0" "13.10") libgcrypt11-dev
 /// $PackageInfo: require_system("ubuntu") gnutls-bin libgnutls-dev pkg-config
 
 #include "inspircd.h"
 #include "modules/ssl.h"
 #include <memory>
+
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+#endif
 
 // Fix warnings about the use of commas at end of enumerator lists on C++03.
 #if defined __clang__
@@ -48,11 +51,15 @@
 # endif
 #endif
 
-// Fix warnings about using std::auto_ptr on C++11 or newer.
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-
 #include <gnutls/gnutls.h>
 #include <gnutls/x509.h>
+
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
+
+// Fix warnings about using std::auto_ptr on C++11 or newer.
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 
 #ifndef GNUTLS_VERSION_NUMBER
 #define GNUTLS_VERSION_NUMBER LIBGNUTLS_VERSION_NUMBER
@@ -191,10 +198,8 @@ namespace GnuTLS
 				hash = GNUTLS_DIG_MD5;
 			else if (stdalgo::string::equalsci(hashname, "sha1"))
 				hash = GNUTLS_DIG_SHA1;
-#ifdef INSPIRCD_GNUTLS_ENABLE_SHA256_FINGERPRINT
 			else if (stdalgo::string::equalsci(hashname, "sha256"))
 				hash = GNUTLS_DIG_SHA256;
-#endif
 			else
 				throw Exception("Unknown hash type " + hashname);
 #endif
@@ -1389,7 +1394,7 @@ class ModuleSSLGnuTLS : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides SSL support for clients", VF_VENDOR);
+		return Version("Provides SSL support via GnuTLS", VF_VENDOR);
 	}
 
 	ModResult OnCheckReady(LocalUser* user) CXX11_OVERRIDE

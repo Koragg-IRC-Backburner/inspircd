@@ -28,10 +28,17 @@
 #include "iohook.h"
 #include "modules/httpd.h"
 
-// Fix warnings about the use of commas at end of enumerator lists on C++03.
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+#endif
+
+// Fix warnings about the use of commas at end of enumerator lists and long long
+// on C++03.
 #if defined __clang__
 # pragma clang diagnostic ignored "-Wc++11-extensions"
+# pragma clang diagnostic ignored "-Wc++11-long-long"
 #elif defined __GNUC__
+# pragma GCC diagnostic ignored "-Wlong-long"
 # if (__GNUC__ > 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ >= 8))
 #  pragma GCC diagnostic ignored "-Wpedantic"
 # else
@@ -40,9 +47,15 @@
 #endif
 
 // Fix warnings about shadowing in http_parser.
-#pragma GCC diagnostic ignored "-Wshadow"
+#ifdef __GNUC__
+# pragma GCC diagnostic ignored "-Wshadow"
+#endif
 
 #include <http_parser.c>
+
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
 class ModuleHttpServer;
 
@@ -56,9 +69,11 @@ static http_parser_settings parser_settings;
  */
 class HttpServerSocket : public BufferedSocket, public Timer, public insp::intrusive_list_node<HttpServerSocket>
 {
-	friend ModuleHttpServer;
+ private:
+	friend class ModuleHttpServer;
 
 	http_parser parser;
+	http_parser_url url;
 	std::string ip;
 	std::string uri;
 	HTTPHeaders headers;
@@ -69,11 +84,17 @@ class HttpServerSocket : public BufferedSocket, public Timer, public insp::intru
 	/** True if this object is in the cull list
 	 */
 	bool waitingcull;
+	bool messagecomplete;
 
 	bool Tick(time_t currtime) CXX11_OVERRIDE
 	{
-		AddToCull();
-		return false;
+		if (!messagecomplete)
+		{
+			AddToCull();
+			return false;
+		}
+
+		return true;
 	}
 
 	template<int (HttpServerSocket::*f)()>
@@ -183,6 +204,7 @@ class HttpServerSocket : public BufferedSocket, public Timer, public insp::intru
 
 	int OnMessageComplete()
 	{
+		messagecomplete = true;
 		ServeData();
 		return 0;
 	}
@@ -194,6 +216,7 @@ class HttpServerSocket : public BufferedSocket, public Timer, public insp::intru
 		, ip(IP)
 		, status_code(0)
 		, waitingcull(false)
+		, messagecomplete(false)
 	{
 		if ((!via->iohookprovs.empty()) && (via->iohookprovs.back()))
 		{
@@ -221,33 +244,19 @@ class HttpServerSocket : public BufferedSocket, public Timer, public insp::intru
 		AddToCull();
 	}
 
-	const char* Response(unsigned int response)
-	{
-		switch (response)
-		{
-#define HTTP_STATUS_CASE(n, m, s) case n: return #s;
-			HTTP_STATUS_MAP(HTTP_STATUS_CASE)
-			default:
-				return "WTF";
-			break;
-		}
-	}
-
 	void SendHTTPError(unsigned int response)
 	{
 		HTTPHeaders empty;
 		std::string data = InspIRCd::Format(
 			"<html><head></head><body>Server error %u: %s<br>"
-			"<small>Powered by <a href='http://www.inspircd.org'>InspIRCd</a></small></body></html>", response, Response(response));
+			"<small>Powered by <a href='https://www.inspircd.org'>InspIRCd</a></small></body></html>", response, http_status_str((http_status)response));
 
-		SendHeaders(data.length(), response, empty);
-		WriteData(data);
-		Close();
+		Page(data, response, &empty);
 	}
 
 	void SendHeaders(unsigned long size, unsigned int response, HTTPHeaders &rheaders)
 	{
-		WriteData(InspIRCd::Format("HTTP/%u.%u %u %s\r\n", parser.http_major ? parser.http_major : 1, parser.http_major ? parser.http_minor : 1, response, Response(response)));
+		WriteData(InspIRCd::Format("HTTP/%u.%u %u %s\r\n", parser.http_major ? parser.http_major : 1, parser.http_major ? parser.http_minor : 1, response, http_status_str((http_status)response)));
 
 		rheaders.CreateHeader("Date", InspIRCd::TimeString(ServerInstance->Time(), "%a, %d %b %Y %H:%M:%S GMT", true));
 		rheaders.CreateHeader("Server", INSPIRCD_BRANCH);
@@ -280,12 +289,14 @@ class HttpServerSocket : public BufferedSocket, public Timer, public insp::intru
 	{
 		ModResult MOD_RESULT;
 		std::string method = http_method_str(static_cast<http_method>(parser.method));
-		HTTPRequest acl(method, uri, &headers, this, ip, body);
+		HTTPRequestURI parsed;
+		ParseURI(uri, parsed);
+		HTTPRequest acl(method, parsed, &headers, this, ip, body);
 		FIRST_MOD_RESULT_CUSTOM(*aclevprov, HTTPACLEventListener, OnHTTPACLCheck, MOD_RESULT, (acl));
 		if (MOD_RESULT != MOD_RES_DENY)
 		{
-			HTTPRequest url(method, uri, &headers, this, ip, body);
-			FIRST_MOD_RESULT_CUSTOM(*reqevprov, HTTPRequestEventListener, OnHTTPRequest, MOD_RESULT, (url));
+			HTTPRequest request(method, parsed, &headers, this, ip, body);
+			FIRST_MOD_RESULT_CUSTOM(*reqevprov, HTTPRequestEventListener, OnHTTPRequest, MOD_RESULT, (request));
 			if (MOD_RESULT == MOD_RES_PASSTHRU)
 			{
 				SendHTTPError(404);
@@ -293,11 +304,16 @@ class HttpServerSocket : public BufferedSocket, public Timer, public insp::intru
 		}
 	}
 
+	void Page(const std::string& s, unsigned int response, HTTPHeaders* hheaders)
+	{
+		SendHeaders(s.length(), response, *hheaders);
+		WriteData(s);
+		Close(true);
+	}
+
 	void Page(std::stringstream* n, unsigned int response, HTTPHeaders* hheaders)
 	{
-		SendHeaders(n->str().length(), response, *hheaders);
-		WriteData(n->str());
-		Close();
+		Page(n->str(), response, hheaders);
 	}
 
 	void AddToCull()
@@ -308,6 +324,40 @@ class HttpServerSocket : public BufferedSocket, public Timer, public insp::intru
 		waitingcull = true;
 		Close();
 		ServerInstance->GlobalCulls.AddItem(this);
+	}
+
+	bool ParseURI(const std::string& uristr, HTTPRequestURI& out)
+	{
+		http_parser_url_init(&url);
+		if (http_parser_parse_url(uristr.c_str(), uristr.size(), 0, &url) != 0)
+			return false;
+
+		if (url.field_set & (1 << UF_PATH))
+			out.path = uri.substr(url.field_data[UF_PATH].off, url.field_data[UF_PATH].len);
+
+		if (url.field_set & (1 << UF_FRAGMENT))
+			out.fragment = uri.substr(url.field_data[UF_FRAGMENT].off, url.field_data[UF_FRAGMENT].len);
+
+		std::string param_str;
+		if (url.field_set & (1 << UF_QUERY))
+			param_str = uri.substr(url.field_data[UF_QUERY].off, url.field_data[UF_QUERY].len);
+
+		irc::sepstream param_stream(param_str, '&');
+		std::string token;
+		std::string::size_type eq_pos;
+		while (param_stream.GetToken(token))
+		{
+			eq_pos = token.find('=');
+			if (eq_pos == std::string::npos)
+			{
+				out.query_params.insert(std::make_pair(token, ""));
+			}
+			else
+			{
+				out.query_params.insert(std::make_pair(token.substr(0, eq_pos), token.substr(eq_pos + 1)));
+			}
+		}
+		return true;
 	}
 };
 

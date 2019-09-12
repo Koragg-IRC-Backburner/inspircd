@@ -89,7 +89,10 @@ void ModeHandler::DisplayEmptyList(User*, Channel*)
 
 void ModeHandler::OnParameterMissing(User* user, User* dest, Channel* channel)
 {
-	const std::string message = InspIRCd::Format("You must specify a parameter for the %s mode", name.c_str());
+	std::string message = InspIRCd::Format("You must specify a parameter for the %s mode.", name.c_str());
+	if (!syntax.empty())
+		message.append(InspIRCd::Format(" Syntax: %s.", syntax.c_str()));
+
 	if (channel)
 		user->WriteNumeric(Numerics::InvalidModeParameter(channel, this, "*", message));
 	else
@@ -171,6 +174,7 @@ PrefixMode::PrefixMode(Module* Creator, const std::string& Name, char ModeLetter
 	, selfremove(true)
 {
 	list = true;
+	syntax = "<nick>";
 }
 
 ModResult PrefixMode::AccessCheck(User* src, Channel*, std::string& value, bool adding)
@@ -245,9 +249,9 @@ ModeAction ModeParser::TryMode(User* user, User* targetuser, Channel* chan, Mode
 	const bool needs_param = mh->NeedsParam(adding);
 
 	std::string& parameter = mcitem.param;
-	// crop mode parameter size to 250 characters
-	if (parameter.length() > 250 && adding)
-		parameter.erase(250);
+	// crop mode parameter size to MODE_PARAM_MAX characters
+	if (parameter.length() > MODE_PARAM_MAX && adding)
+		parameter.erase(MODE_PARAM_MAX);
 
 	ModResult MOD_RESULT;
 	FIRST_MOD_RESULT(OnRawMode, MOD_RESULT, (user, chan, mh, parameter, adding));
@@ -312,18 +316,18 @@ ModeAction ModeParser::TryMode(User* user, User* targetuser, Channel* chan, Mode
 		}
 	}
 
-	if ((adding) && (IS_LOCAL(user)) && (mh->NeedsOper()) && (!user->HasModePermission(mh)))
+	if ((chan || (!chan && adding)) && IS_LOCAL(user) && mh->NeedsOper() && !user->HasModePermission(mh))
 	{
 		/* It's an oper only mode, and they don't have access to it. */
 		if (user->IsOper())
 		{
-			user->WriteNumeric(ERR_NOPRIVILEGES, InspIRCd::Format("Permission Denied - Oper type %s does not have access to set %s mode %c",
-					user->oper->name.c_str(), type == MODETYPE_CHANNEL ? "channel" : "user", modechar));
+			user->WriteNumeric(ERR_NOPRIVILEGES, InspIRCd::Format("Permission Denied - Oper type %s does not have access to %sset %s mode %c",
+					user->oper->name.c_str(), adding ? "" : "un", type == MODETYPE_CHANNEL ? "channel" : "user", modechar));
 		}
 		else
 		{
-			user->WriteNumeric(ERR_NOPRIVILEGES, InspIRCd::Format("Permission Denied - Only operators may set %s mode %c",
-					type == MODETYPE_CHANNEL ? "channel" : "user", modechar));
+			user->WriteNumeric(ERR_NOPRIVILEGES, InspIRCd::Format("Permission Denied - Only operators may %sset %s mode %c",
+					adding ? "" : "un", type == MODETYPE_CHANNEL ? "channel" : "user", modechar));
 		}
 		return MODEACTION_DENY;
 	}
@@ -371,7 +375,7 @@ void ModeParser::ModeParamsToChangeList(User* user, ModeType type, const std::ve
 		if (!mh)
 		{
 			/* No mode handler? Unknown mode character then. */
-			user->WriteNumeric(type == MODETYPE_CHANNEL ? ERR_UNKNOWNMODE : ERR_UNKNOWNSNOMASK, modechar, "is unknown mode char to me");
+			user->WriteNumeric(type == MODETYPE_CHANNEL ? ERR_UNKNOWNMODE : ERR_UNKNOWNSNOMASK, modechar, "is an unknown mode character");
 			continue;
 		}
 
@@ -592,13 +596,13 @@ void ModeParser::AddMode(ModeHandler* mh)
 
 		PrefixMode* otherpm = FindPrefix(pm->GetPrefix());
 		if (otherpm)
-			throw ModuleException(InspIRCd::Format("Mode prefix for %s already by used by %s from %s: %c",
+			throw ModuleException(InspIRCd::Format("Mode prefix for %s already used by %s from %s: %c",
 				mh->name.c_str(), otherpm->name.c_str(), otherpm->creator->ModuleSourceFile.c_str(), pm->GetPrefix()));
 	}
 
 	ModeHandler*& slot = modehandlers[mh->GetModeType()][mh->GetModeChar()-65];
 	if (slot)
-		throw ModuleException(InspIRCd::Format("Mode letter for %s already by used by %s from %s: %c",
+		throw ModuleException(InspIRCd::Format("Mode letter for %s already used by %s from %s: %c",
 			mh->name.c_str(), slot->name.c_str(), slot->creator->ModuleSourceFile.c_str(), mh->GetModeChar()));
 
 	// The mode needs an id if it is either a user mode, a simple mode (flag) or a parameter mode.

@@ -37,13 +37,14 @@ class ChanFilter : public ListModeBase
 	ChanFilter(Module* Creator)
 		: ListModeBase(Creator, "filter", 'g', "End of channel spamfilter list", 941, 940, false)
 	{
+		syntax = "<pattern>";
 	}
 
 	bool ValidateParam(User* user, Channel* chan, std::string& word) CXX11_OVERRIDE
 	{
 		if (word.length() > maxlen)
 		{
-			user->WriteNumeric(Numerics::InvalidModeParameter(chan, this, word, "Word is too long for the spamfilter list"));
+			user->WriteNumeric(Numerics::InvalidModeParameter(chan, this, word, "Word is too long for the spamfilter list."));
 			return false;
 		}
 
@@ -70,7 +71,7 @@ class ModuleChanFilter : public Module
 	{
 		ConfigTag* tag = ServerInstance->Config->ConfValue("chanfilter");
 		hidemask = tag->getBool("hidemask");
-		cf.maxlen = tag->getUInt("maxlen", 35, 10, 100);
+		cf.maxlen = tag->getUInt("maxlen", 35, 10, ModeParser::MODE_PARAM_MAX);
 		notifyuser = tag->getBool("notifyuser", true);
 		cf.DoRehash();
 	}

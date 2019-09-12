@@ -10,17 +10,17 @@ This directory contains vendored dependencies that are shipped with InspIRCd to 
 
 **License** &mdash; Public Domain
 
-**Website** &mdash; [http://openwall.com/crypt/](http://openwall.com/crypt/)
+**Website** &mdash; [https://www.openwall.com/crypt/](https://www.openwall.com/crypt/)
 
 ## http_parser
 
 **Author** &mdash; Joyent, Inc. and other Node contributors
 
-**Last Updated** &mdash; 2019-01-01 (v2.9.0)
+**Last Updated** &mdash; 2019-04-25 (v2.9.2)
 
 **License** &mdash; MIT License
 
-**Website** &mdash; (https://github.com/nodejs/http-parser)[https://github.com/nodejs/http-parser]
+**Website** &mdash; [https://github.com/nodejs/http-parser](https://github.com/nodejs/http-parser)
 
 ## sha256
 
@@ -36,7 +36,7 @@ This directory contains vendored dependencies that are shipped with InspIRCd to 
 
 **Author** &mdash; Nemanja Trifunovic
 
-**Last Updated** &mdash; 2018-09-17 (0a238813416e0ac8ea998b8814f00611a00f0735)
+**Last Updated** &mdash; 2019-08-02 (v3.1)
 
 **License** &mdash; Boost Software License
 

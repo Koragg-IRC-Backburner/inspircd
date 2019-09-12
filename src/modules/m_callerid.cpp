@@ -22,6 +22,7 @@
 
 #include "inspircd.h"
 #include "modules/callerid.h"
+#include "modules/ctctags.h"
 
 enum
 {
@@ -53,7 +54,7 @@ class callerid_data
 
 	callerid_data() : lastnotify(0) { }
 
-	std::string ToString(SerializeFormat format) const
+	std::string ToString(bool human) const
 	{
 		std::ostringstream oss;
 		oss << lastnotify;
@@ -61,7 +62,7 @@ class callerid_data
 		{
 			User* u = *i;
 			// Encode UIDs.
-			oss << "," << (format == FORMAT_USER ? u->nick : u->uuid);
+			oss << "," << (human ? u->nick : u->uuid);
 		}
 		return oss.str();
 	}
@@ -74,22 +75,20 @@ struct CallerIDExtInfo : public ExtensionItem
 	{
 	}
 
-	std::string serialize(SerializeFormat format, const Extensible* container, void* item) const CXX11_OVERRIDE
+	std::string ToHuman(const Extensible* container, void* item) const CXX11_OVERRIDE
 	{
-		std::string ret;
-		if (format != FORMAT_NETWORK)
-		{
-			callerid_data* dat = static_cast<callerid_data*>(item);
-			ret = dat->ToString(format);
-		}
-		return ret;
+		callerid_data* dat = static_cast<callerid_data*>(item);
+		return dat->ToString(true);
 	}
 
-	void unserialize(SerializeFormat format, Extensible* container, const std::string& value) CXX11_OVERRIDE
+	std::string ToInternal(const Extensible* container, void* item) const CXX11_OVERRIDE
 	{
-		if (format == FORMAT_NETWORK)
-			return;
+		callerid_data* dat = static_cast<callerid_data*>(item);
+		return dat->ToString(false);
+	}
 
+	void FromInternal(Extensible* container, const std::string& value) CXX11_OVERRIDE
+	{
 		void* old = get_raw(container);
 		if (old)
 			this->free(NULL, old);
@@ -179,7 +178,7 @@ public:
 		extInfo(Creator)
 	{
 		allow_empty_last_param = false;
-		syntax = "*|(+|-)<nick>[,(+|-)<nick> ...]";
+		syntax = "*|(+|-)<nick>[,(+|-)<nick>]+";
 		TRANSLATE1(TR_CUSTOM);
 	}
 
@@ -189,7 +188,7 @@ public:
 		if (parameter.find(',') != std::string::npos)
 			return;
 
-		// Convert a [+|-]<nick> into a [-]<uuid>
+		// Convert a (+|-)<nick> into a [-]<uuid>
 		ACCEPTAction action = GetTargetAndAction(parameter);
 		if (!action.first)
 			return;
@@ -345,7 +344,9 @@ class CallerIDAPIImpl : public CallerID::APIBase
 };
 
 
-class ModuleCallerID : public Module
+class ModuleCallerID
+	: public Module
+	, public CTCTags::EventListener
 {
 	CommandAccept cmd;
 	CallerIDAPIImpl api;
@@ -380,7 +381,8 @@ class ModuleCallerID : public Module
 
 public:
 	ModuleCallerID()
-		: cmd(this)
+		: CTCTags::EventListener(this)
+		, cmd(this)
 		, api(this, cmd.extInfo)
 		, myumode(this, "callerid", 'g')
 	{
@@ -388,7 +390,7 @@ public:
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Implementation of callerid, usermode +g, /accept", VF_COMMON | VF_VENDOR);
+		return Version("Implementation of callerid, provides user mode +g and the ACCEPT command", VF_COMMON | VF_VENDOR);
 	}
 
 	void On005Numeric(std::map<std::string, std::string>& tokens) CXX11_OVERRIDE
@@ -397,7 +399,7 @@ public:
 		tokens["CALLERID"] = ConvToStr(myumode.GetModeChar());
 	}
 
-	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	ModResult HandleMessage(User* user, const MessageTarget& target)
 	{
 		if (!IS_LOCAL(user) || target.type != MessageTarget::TYPE_USER)
 			return MOD_RES_PASSTHRU;
@@ -406,7 +408,7 @@ public:
 		if (!dest->IsModeSet(myumode) || (user == dest))
 			return MOD_RES_PASSTHRU;
 
-		if (user->HasPrivPermission("users/callerid-override"))
+		if (user->HasPrivPermission("users/ignore-callerid"))
 			return MOD_RES_PASSTHRU;
 
 		callerid_data* dat = cmd.extInfo.get(dest, true);
@@ -418,13 +420,23 @@ public:
 			if (now > (dat->lastnotify + (time_t)notify_cooldown))
 			{
 				user->WriteNumeric(RPL_TARGNOTIFY, dest->nick, "has been informed that you messaged them.");
-				dest->WriteRemoteNumeric(RPL_UMODEGMSG, user->nick, InspIRCd::Format("%s@%s", user->ident.c_str(), user->GetDisplayedHost().c_str()), InspIRCd::Format("is messaging you, and you have umode +g. Use /ACCEPT +%s to allow.",
+				dest->WriteRemoteNumeric(RPL_UMODEGMSG, user->nick, InspIRCd::Format("%s@%s", user->ident.c_str(), user->GetDisplayedHost().c_str()), InspIRCd::Format("is messaging you, and you have user mode +g set. Use /ACCEPT +%s to allow.",
 						user->nick.c_str()));
 				dat->lastnotify = now;
 			}
 			return MOD_RES_DENY;
 		}
 		return MOD_RES_PASSTHRU;
+	}
+
+	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target);
+	}
+
+	ModResult OnUserPreTagMessage(User* user, const MessageTarget& target, CTCTags::TagMessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target);
 	}
 
 	void OnUserPostNick(User* user, const std::string& oldnick) CXX11_OVERRIDE

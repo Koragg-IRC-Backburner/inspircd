@@ -28,7 +28,7 @@ class CommandCycle : public SplitCommand
 	CommandCycle(Module* Creator)
 		: SplitCommand(Creator, "CYCLE", 1)
 	{
-		Penalty = 3; syntax = "<channel> :[reason]";
+		Penalty = 3; syntax = "<channel> [:<reason>]";
 	}
 
 	CmdResult HandleLocal(LocalUser* user, const Params& parameters) CXX11_OVERRIDE
@@ -84,7 +84,7 @@ class ModuleCycle : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides command CYCLE, acts as a server-side HOP command to part and rejoin a channel.", VF_VENDOR);
+		return Version("Provides the CYCLE command, acts as a server-side HOP command to part and rejoin a channel", VF_VENDOR);
 	}
 };
 

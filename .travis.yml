@@ -1,7 +1,10 @@
 compiler:
   - clang
   - gcc
-dist: trusty
+dist: xenial
+env:
+    - CXXFLAGS=-std=gnu++98
+    - CXXFLAGS=-std=c++14
 language: cpp
 notifications:
   email: false

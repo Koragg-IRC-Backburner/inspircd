@@ -25,6 +25,7 @@
 #include "inspircd.h"
 #include "modules/account.h"
 #include "modules/callerid.h"
+#include "modules/ctctags.h"
 #include "modules/exemption.h"
 #include "modules/whois.h"
 
@@ -53,7 +54,7 @@ class Channel_r : public ModeHandler
 
 	ModeAction OnModeChange(User* source, User* dest, Channel* channel, std::string& parameter, bool adding) CXX11_OVERRIDE
 	{
-		// only a u-lined server may add or remove the +r mode.
+		// Only a U-lined server may add or remove the +r mode.
 		if (!IS_LOCAL(source))
 		{
 			// Only change the mode if it's not redundant
@@ -108,16 +109,16 @@ class AccountExtItemImpl : public AccountExtItem
 	{
 	}
 
-	void unserialize(SerializeFormat format, Extensible* container, const std::string& value) CXX11_OVERRIDE
+	void FromInternal(Extensible* container, const std::string& value) CXX11_OVERRIDE
 	{
+		StringExtItem::FromInternal(container, value);
+	}
+
+	void FromNetwork(Extensible* container, const std::string& value) CXX11_OVERRIDE
+	{
+		StringExtItem::FromNetwork(container, value);
+
 		User* user = static_cast<User*>(container);
-
-		StringExtItem::unserialize(format, container, value);
-
-		// If we are being reloaded then don't send the numeric or run the event
-		if (format == FORMAT_INTERNAL)
-			return;
-
 		if (IS_LOCAL(user))
 		{
 			if (value.empty())
@@ -136,7 +137,10 @@ class AccountExtItemImpl : public AccountExtItem
 	}
 };
 
-class ModuleServicesAccount : public Module, public Whois::EventListener
+class ModuleServicesAccount
+	: public Module
+	, public Whois::EventListener
+	, public CTCTags::EventListener
 {
  private:
 	CallerID::API calleridapi;
@@ -152,6 +156,7 @@ class ModuleServicesAccount : public Module, public Whois::EventListener
  public:
 	ModuleServicesAccount()
 		: Whois::EventListener(this)
+		, CTCTags::EventListener(this)
 		, calleridapi(this)
 		, exemptionprov(this)
 		, m1(this, "reginvite", 'R')
@@ -194,7 +199,7 @@ class ModuleServicesAccount : public Module, public Whois::EventListener
 			m5.RemoveMode(user);
 	}
 
-	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	ModResult HandleMessage(User* user, const MessageTarget& target)
 	{
 		if (!IS_LOCAL(user))
 			return MOD_RES_PASSTHRU;
@@ -202,34 +207,51 @@ class ModuleServicesAccount : public Module, public Whois::EventListener
 		std::string *account = accountname.get(user);
 		bool is_registered = account && !account->empty();
 
-		if (target.type == MessageTarget::TYPE_CHANNEL)
+		switch (target.type)
 		{
-			Channel* targchan = target.Get<Channel>();
+			case MessageTarget::TYPE_CHANNEL:
+			{
+				Channel* targchan = target.Get<Channel>();
 
-			if (!targchan->IsModeSet(m2) || is_registered)
-				return MOD_RES_PASSTHRU;
+				if (!targchan->IsModeSet(m2) || is_registered)
+					return MOD_RES_PASSTHRU;
 
-			if (CheckExemption::Call(exemptionprov, user, targchan, "regmoderated") == MOD_RES_ALLOW)
-				return MOD_RES_PASSTHRU;
+				if (CheckExemption::Call(exemptionprov, user, targchan, "regmoderated") == MOD_RES_ALLOW)
+					return MOD_RES_PASSTHRU;
 
-			// User is messaging a +M channel and is not registered or exempt.
-			user->WriteNumeric(ERR_NEEDREGGEDNICK, targchan->name, "You need to be identified to a registered account to message this channel");
-			return MOD_RES_DENY;
-		}
-		else if (target.type == MessageTarget::TYPE_USER)
-		{
-			User* targuser = target.Get<User>();
-			if (!targuser->IsModeSet(m3)  || is_registered)
-				return MOD_RES_PASSTHRU;
+				// User is messaging a +M channel and is not registered or exempt.
+				user->WriteNumeric(ERR_NEEDREGGEDNICK, targchan->name, "You need to be identified to a registered account to message this channel");
+				return MOD_RES_DENY;
+				break;
+			}
+			case MessageTarget::TYPE_USER:
+			{
+				User* targuser = target.Get<User>();
+				if (!targuser->IsModeSet(m3)  || is_registered)
+					return MOD_RES_PASSTHRU;
 
-			if (calleridapi && calleridapi->IsOnAcceptList(user, targuser))
-				return MOD_RES_PASSTHRU;
+				if (calleridapi && calleridapi->IsOnAcceptList(user, targuser))
+					return MOD_RES_PASSTHRU;
 
-			// User is messaging a +R user and is not registered or on an accept list.
-			user->WriteNumeric(ERR_NEEDREGGEDNICK, targuser->nick, "You need to be identified to a registered account to message this user");
-			return MOD_RES_DENY;
+				// User is messaging a +R user and is not registered or on an accept list.
+				user->WriteNumeric(ERR_NEEDREGGEDNICK, targuser->nick, "You need to be identified to a registered account to message this user");
+				return MOD_RES_DENY;
+				break;
+			}
+			case MessageTarget::TYPE_SERVER:
+				break;
 		}
 		return MOD_RES_PASSTHRU;
+	}
+
+	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target);
+	}
+
+	ModResult OnUserPreTagMessage(User* user, const MessageTarget& target, CTCTags::TagMessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target);
 	}
 
 	ModResult OnCheckBan(User* user, Channel* chan, const std::string& mask) CXX11_OVERRIDE
@@ -297,7 +319,7 @@ class ModuleServicesAccount : public Module, public Whois::EventListener
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for ircu-style services accounts, including chmode +R, etc.",VF_OPTCOMMON|VF_VENDOR);
+		return Version("Provides support for ircu-style services accounts, including channel mode +R, etc", VF_OPTCOMMON|VF_VENDOR);
 	}
 };
 

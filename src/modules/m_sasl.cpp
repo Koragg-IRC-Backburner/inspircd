@@ -37,7 +37,8 @@ enum
 
 static std::string sasl_target;
 
-class ServerTracker : public ServerEventListener
+class ServerTracker
+	: public ServerProtocol::LinkEventListener
 {
 	bool online;
 
@@ -65,7 +66,7 @@ class ServerTracker : public ServerEventListener
 
  public:
 	ServerTracker(Module* mod)
-		: ServerEventListener(mod)
+		: ServerProtocol::LinkEventListener(mod)
 	{
 		Reset();
 	}
@@ -103,16 +104,15 @@ class SASLCap : public Cap::Capability
 
 	bool OnRequest(LocalUser* user, bool adding) CXX11_OVERRIDE
 	{
-		// Requesting this cap is allowed anytime
-		if (adding)
-			return true;
-
-		// But removing it can only be done when unregistered
-		return (user->registered != REG_ALL);
+		// Servers MUST NAK any sasl capability request if the authentication layer
+		// is unavailable.
+		return servertracker.IsOnline();
 	}
 
 	bool OnList(LocalUser* user) CXX11_OVERRIDE
 	{
+		// Servers MUST NOT advertise the sasl capability if the authentication layer
+		// is unavailable.
 		return servertracker.IsOnline();
 	}
 
@@ -284,7 +284,7 @@ class SaslAuthenticator
 		 case SASL_OK:
 			this->user->WriteNumeric(RPL_SASLSUCCESS, "SASL authentication successful");
 			break;
-	 	 case SASL_ABORT:
+		 case SASL_ABORT:
 			this->user->WriteNumeric(ERR_SASLABORTED, "SASL authentication aborted");
 			break;
 		 case SASL_FAIL:
@@ -432,7 +432,7 @@ class ModuleSASL : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for IRC Authentication Layer (aka: SASL) via AUTHENTICATE.", VF_VENDOR);
+		return Version("Provides support for IRC Authentication Layer (aka: SASL) via AUTHENTICATE", VF_VENDOR);
 	}
 };
 

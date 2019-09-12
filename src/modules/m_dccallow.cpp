@@ -54,7 +54,7 @@ static const char* const helptext[] =
 	"Brain would then be able to send you files. They would have to",
 	"resend the file again if the server gave them an error message",
 	"before you added them to your DCCALLOW list.",
-	"DCCALLOW entries will be temporary by default, if you want to add",
+	"DCCALLOW entries will be temporary. If you want to add",
 	"them to your DCCALLOW list until you leave IRC, type:",
 	"/DCCALLOW +Brain 0",
 	"To remove the user from your DCCALLOW list, type:",
@@ -63,7 +63,7 @@ static const char* const helptext[] =
 	"/DCCALLOW LIST",
 	"NOTE: If the user leaves IRC or changes their nickname",
 	"  they will be removed from your DCCALLOW list.",
-	"  your DCCALLOW list will be deleted when you leave IRC."
+	"  Your DCCALLOW list will be deleted when you leave IRC."
 };
 
 class BannedFileList
@@ -98,14 +98,83 @@ typedef std::vector<DCCAllow> dccallowlist;
 dccallowlist* dl;
 typedef std::vector<BannedFileList> bannedfilelist;
 bannedfilelist bfl;
-typedef SimpleExtItem<dccallowlist> DCCAllowExt;
+
+class DCCAllowExt : public SimpleExtItem<dccallowlist>
+{
+ public:
+	unsigned int maxentries;
+
+	DCCAllowExt(Module* Creator)
+		: SimpleExtItem<dccallowlist>("dccallow", ExtensionItem::EXT_USER, Creator)
+	{
+	}
+
+	void FromInternal(Extensible* container, const std::string& value) CXX11_OVERRIDE
+	{
+		LocalUser* user = IS_LOCAL(static_cast<User*>(container));
+		if (!user)
+			return;
+
+		// Remove the old list and create a new one.
+		unset(user);
+		dccallowlist* list = new dccallowlist();
+
+		irc::spacesepstream ts(value);
+		while (!ts.StreamEnd())
+		{
+			// Check we have space for another entry.
+			if (list->size() >= maxentries)
+			{
+				ServerInstance->Logs->Log(MODNAME, LOG_DEBUG, "Oversized DCC allow list received for %s: %s",
+					user->uuid.c_str(), value.c_str());
+				delete list;
+				return;
+			}
+
+			// Extract the fields.
+			DCCAllow dccallow;
+			if (!ts.GetToken(dccallow.nickname) ||
+				!ts.GetToken(dccallow.hostmask) ||
+				!ts.GetNumericToken(dccallow.set_on) ||
+				!ts.GetNumericToken(dccallow.length))
+			{
+				ServerInstance->Logs->Log(MODNAME, LOG_DEBUG, "Malformed DCC allow list received for %s: %s",
+					user->uuid.c_str(), value.c_str());
+				delete list;
+				return;
+			}
+
+			// Store the DCC allow entry.
+			list->push_back(dccallow);
+		}
+
+	}
+
+	std::string ToInternal(const Extensible* container, void* item) const CXX11_OVERRIDE
+	{
+		dccallowlist* list = static_cast<dccallowlist*>(item);
+		std::string buf;
+		for (dccallowlist::const_iterator iter = list->begin(); iter != list->end(); ++iter)
+		{
+			if (iter != list->begin())
+				buf.push_back(' ');
+
+			buf.append(iter->nickname);
+			buf.push_back(' ');
+			buf.append(iter->hostmask);
+			buf.push_back(' ');
+			buf.append(ConvToStr(iter->set_on));
+			buf.push_back(' ');
+			buf.append(ConvToStr(iter->length));
+		}
+		return buf;
+	}
+};
 
 class CommandDccallow : public Command
 {
-	DCCAllowExt& ext;
-
  public:
-	unsigned int maxentries;
+	DCCAllowExt& ext;
 	unsigned long defaultlength;
 	CommandDccallow(Module* parent, DCCAllowExt& Ext)
 		: Command(parent, "DCCALLOW", 0)
@@ -117,7 +186,7 @@ class CommandDccallow : public Command
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
 	{
-		/* syntax: DCCALLOW [+|-]<nick> (<time>) */
+		/* syntax: DCCALLOW [(+|-)<nick> [<time>]]|[LIST|HELP] */
 		if (!parameters.size())
 		{
 			// display current DCCALLOW list
@@ -191,7 +260,7 @@ class CommandDccallow : public Command
 						ul.push_back(user);
 					}
 
-					if (dl->size() >= maxentries)
+					if (dl->size() >= ext.maxentries)
 					{
 						user->WriteNumeric(ERR_DCCALLOWINVALID, user->nick, "Too many nicks on DCCALLOW list");
 						return CMD_FAILURE;
@@ -235,7 +304,7 @@ class CommandDccallow : public Command
 
 					if (length > 0)
 					{
-						user->WriteNumeric(RPL_DCCALLOWTIMED, user->nick, InspIRCd::Format("Added %s to DCCALLOW list for %ld seconds", target->nick.c_str(), length));
+						user->WriteNumeric(RPL_DCCALLOWTIMED, user->nick, InspIRCd::Format("Added %s to DCCALLOW list for %s", target->nick.c_str(), InspIRCd::DurationString(length).c_str()));
 					}
 					else
 					{
@@ -301,7 +370,7 @@ class ModuleDCCAllow : public Module
 
  public:
 	ModuleDCCAllow()
-		: ext("dccallow", ExtensionItem::EXT_USER, this)
+		: ext(this)
 		, cmd(this, ext)
 		, blockchat(false)
 	{
@@ -521,7 +590,7 @@ class ModuleDCCAllow : public Module
 		bfl.swap(newbfl);
 
 		ConfigTag* tag = ServerInstance->Config->ConfValue("dccallow");
-		cmd.maxentries = tag->getUInt("maxentries", 20);
+		cmd.ext.maxentries = tag->getUInt("maxentries", 20);
 		cmd.defaultlength = tag->getDuration("length", 0);
 		blockchat = tag->getBool("blockchat");
 		defaultaction = tag->getString("action");
@@ -529,7 +598,7 @@ class ModuleDCCAllow : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for the /DCCALLOW command", VF_COMMON | VF_VENDOR);
+		return Version("Provides the DCCALLOW command", VF_COMMON | VF_VENDOR);
 	}
 };
 

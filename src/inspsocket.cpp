@@ -48,36 +48,15 @@ BufferedSocket::BufferedSocket(int newfd)
 		SocketEngine::AddFd(this, FD_WANT_FAST_READ | FD_WANT_EDGE_WRITE);
 }
 
-void BufferedSocket::DoConnect(const std::string& ipaddr, int aport, unsigned int maxtime, const std::string& connectbindip)
+void BufferedSocket::DoConnect(const irc::sockets::sockaddrs& dest, const irc::sockets::sockaddrs& bind, unsigned int maxtime)
 {
-	BufferedSocketError err = BeginConnect(ipaddr, aport, maxtime, connectbindip);
+	BufferedSocketError err = BeginConnect(dest, bind, maxtime);
 	if (err != I_ERR_NONE)
 	{
 		state = I_ERROR;
 		SetError(SocketEngine::LastError());
 		OnError(err);
 	}
-}
-
-BufferedSocketError BufferedSocket::BeginConnect(const std::string& ipaddr, int aport, unsigned int maxtime, const std::string& connectbindip)
-{
-	irc::sockets::sockaddrs addr, bind;
-	if (!irc::sockets::aptosa(ipaddr, aport, addr))
-	{
-		ServerInstance->Logs->Log("SOCKET", LOG_DEBUG, "BUG: Hostname passed to BufferedSocket, rather than an IP address!");
-		return I_ERR_CONNECT;
-	}
-
-	bind.sa.sa_family = 0;
-	if (!connectbindip.empty())
-	{
-		if (!irc::sockets::aptosa(connectbindip, 0, bind))
-		{
-			return I_ERR_BIND;
-		}
-	}
-
-	return BeginConnect(addr, bind, maxtime);
 }
 
 BufferedSocketError BufferedSocket::BeginConnect(const irc::sockets::sockaddrs& dest, const irc::sockets::sockaddrs& bind, unsigned int timeout)
@@ -116,6 +95,10 @@ BufferedSocketError BufferedSocket::BeginConnect(const irc::sockets::sockaddrs& 
 
 void StreamSocket::Close()
 {
+	if (closing)
+		return;
+
+	closing = true;
 	if (this->fd > -1)
 	{
 		// final chance, dump as much of the sendq as we can
@@ -133,6 +116,14 @@ void StreamSocket::Close()
 		SocketEngine::Shutdown(this, 2);
 		SocketEngine::Close(this);
 	}
+}
+
+void StreamSocket::Close(bool writeblock)
+{
+	if (getSendQSize() != 0 && writeblock)
+		closeonempty = true;
+	else
+		Close();
 }
 
 CullResult StreamSocket::cull()
@@ -227,7 +218,12 @@ static const int MYIOV_MAX = IOV_MAX < 128 ? IOV_MAX : 128;
 void StreamSocket::DoWrite()
 {
 	if (getSendQSize() == 0)
+	{
+		if (closeonempty)
+			Close();
+
 		return;
+	}
 	if (!error.empty() || fd < 0)
 	{
 		ServerInstance->Logs->Log("SOCKET", LOG_DEBUG, "DoWrite on errored or closed socket");
@@ -263,6 +259,9 @@ void StreamSocket::DoWrite()
 
 	if (psendq)
 		FlushSendQ(*psendq);
+
+	if (getSendQSize() == 0 && closeonempty)
+		Close();
 }
 
 void StreamSocket::FlushSendQ(SendQueue& sq)
@@ -541,4 +540,18 @@ size_t StreamSocket::getSendQSize() const
 		curr = iohm->GetNextHook();
 	}
 	return ret;
+}
+
+void StreamSocket::SwapInternals(StreamSocket& other)
+{
+	if (type != other.type)
+		return;
+
+	EventHandler::SwapInternals(other);
+	std::swap(closeonempty, other.closeonempty);
+	std::swap(closing, other.closing);
+	std::swap(error, other.error);
+	std::swap(iohook, other.iohook);
+	std::swap(recvq, other.recvq);
+	std::swap(sendq, other.sendq);
 }

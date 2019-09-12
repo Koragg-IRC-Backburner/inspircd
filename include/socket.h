@@ -120,6 +120,19 @@ namespace irc
 		 * @return true if the conversion was successful, false if not.
 		 */
 		CoreExport bool aptosa(const std::string& addr, int port, irc::sockets::sockaddrs& sa);
+
+		/** Convert a UNIX socket path to a binary sockaddr.
+		 * @param path The path to the UNIX socket.
+		 * @param sa The structure to place the result in. Will be zeroed prior to conversion.
+		 * @return True if the conversion was successful; otherwise, false.
+		 */
+		CoreExport bool untosa(const std::string& path, irc::sockets::sockaddrs& sa);
+
+		/** Determines whether the specified file is a UNIX socket.
+		 * @param file The path to the file to check.
+		 * @return True if the file is a UNIX socket; otherwise, false.
+		 */
+		CoreExport bool isunix(const std::string& file);
 	}
 }
 

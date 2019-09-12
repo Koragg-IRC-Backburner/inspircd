@@ -33,7 +33,7 @@ class CommandChghost : public Command
 	{
 		allow_empty_last_param = false;
 		flags_needed = 'o';
-		syntax = "<nick> <newhost>";
+		syntax = "<nick> <host>";
 		TRANSLATE2(TR_NICK, TR_TEXT);
 	}
 
@@ -103,7 +103,7 @@ class ModuleChgHost : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for the CHGHOST command", VF_OPTCOMMON | VF_VENDOR);
+		return Version("Provides the CHGHOST command", VF_OPTCOMMON | VF_VENDOR);
 	}
 };
 

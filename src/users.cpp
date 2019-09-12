@@ -46,7 +46,7 @@ std::string User::GetModeLetters(bool includeparams) const
 	std::string ret(1, '+');
 	std::string params;
 
-	for (unsigned char i = 'A'; i < 'z'; i++)
+	for (unsigned char i = 'A'; i <= 'z'; i++)
 	{
 		const ModeHandler* const mh = ServerInstance->Modes.FindMode(i, MODETYPE_USER);
 		if ((!mh) || (!IsModeSet(mh)))
@@ -97,7 +97,7 @@ LocalUser::LocalUser(int myfd, irc::sockets::sockaddrs* client, irc::sockets::so
 	, quitting_sendq(false)
 	, lastping(true)
 	, exempt(false)
-	, nping(0)
+	, nextping(0)
 	, idle_lastmsg(0)
 	, CommandFloodPenalty(0)
 	, already_sent(0)
@@ -105,7 +105,7 @@ LocalUser::LocalUser(int myfd, irc::sockets::sockaddrs* client, irc::sockets::so
 	signon = ServerInstance->Time();
 	// The user's default nick is their UUID
 	nick = uuid;
-	ident = "unknown";
+	ident = uuid;
 	eh.SetFd(myfd);
 	memcpy(&client_sa, client, sizeof(irc::sockets::sockaddrs));
 	memcpy(&server_sa, servaddr, sizeof(irc::sockets::sockaddrs));
@@ -121,7 +121,6 @@ const std::string& User::MakeHost()
 	if (!this->cached_makehost.empty())
 		return this->cached_makehost;
 
-	// XXX: Is there really a need to cache this?
 	this->cached_makehost = ident + "@" + GetRealHost();
 	return this->cached_makehost;
 }
@@ -131,7 +130,6 @@ const std::string& User::MakeHostIP()
 	if (!this->cached_hostip.empty())
 		return this->cached_hostip;
 
-	// XXX: Is there really a need to cache this?
 	this->cached_hostip = ident + "@" + this->GetIPString();
 	return this->cached_hostip;
 }
@@ -141,7 +139,6 @@ const std::string& User::GetFullHost()
 	if (!this->cached_fullhost.empty())
 		return this->cached_fullhost;
 
-	// XXX: Is there really a need to cache this?
 	this->cached_fullhost = nick + "!" + ident + "@" + GetDisplayedHost();
 	return this->cached_fullhost;
 }
@@ -151,7 +148,6 @@ const std::string& User::GetFullRealHost()
 	if (!this->cached_fullrealhost.empty())
 		return this->cached_fullrealhost;
 
-	// XXX: Is there really a need to cache this?
 	this->cached_fullrealhost = nick + "!" + ident + "@" + GetRealHost();
 	return this->cached_fullrealhost;
 }
@@ -167,7 +163,8 @@ bool LocalUser::HasModePermission(const ModeHandler* mh) const
 		return false;
 
 	const unsigned char mode = mh->GetModeChar();
-	if (mode < 'A' || mode > ('A' + 64)) return false;
+	if (!ModeParser::IsModeChar(mode))
+		return false;
 
 	return ((mh->GetModeType() == MODETYPE_USER ? oper->AllowedUserModes : oper->AllowedChanModes))[(mode - 'A')];
 
@@ -179,12 +176,12 @@ bool LocalUser::HasModePermission(const ModeHandler* mh) const
  * allowing remote kills, etc - but if they have access to the src, they most likely have
  * access to the conf - so it's an end to a means either way.
  */
-bool User::HasPermission(const std::string&)
+bool User::HasCommandPermission(const std::string&)
 {
 	return true;
 }
 
-bool LocalUser::HasPermission(const std::string &command)
+bool LocalUser::HasCommandPermission(const std::string& command)
 {
 	// are they even an oper at all?
 	if (!this->IsOper())
@@ -195,27 +192,17 @@ bool LocalUser::HasPermission(const std::string &command)
 	return oper->AllowedOperCommands.Contains(command);
 }
 
-bool User::HasPrivPermission(const std::string &privstr, bool noisy)
+bool User::HasPrivPermission(const std::string& privstr)
 {
 	return true;
 }
 
-bool LocalUser::HasPrivPermission(const std::string &privstr, bool noisy)
+bool LocalUser::HasPrivPermission(const std::string& privstr)
 {
 	if (!this->IsOper())
-	{
-		if (noisy)
-			this->WriteNotice("You are not an oper");
 		return false;
-	}
 
-	if (oper->AllowedPrivs.Contains(privstr))
-		return true;
-
-	if (noisy)
-		this->WriteNotice("Oper type " + oper->name + " does not have access to priv " + privstr);
-
-	return false;
+	return oper->AllowedPrivs.Contains(privstr);
 }
 
 void UserIOHandler::OnDataReady()
@@ -314,6 +301,12 @@ void UserIOHandler::AddWriteBuf(const std::string &data)
 	WriteData(data);
 }
 
+void UserIOHandler::SwapInternals(UserIOHandler& other)
+{
+	StreamSocket::SwapInternals(other);
+	std::swap(checked_until, other.checked_until);
+}
+
 bool UserIOHandler::OnSetEndPoint(const irc::sockets::sockaddrs& server, const irc::sockets::sockaddrs& client)
 {
 	memcpy(&user->server_sa, &server, sizeof(irc::sockets::sockaddrs));
@@ -321,9 +314,12 @@ bool UserIOHandler::OnSetEndPoint(const irc::sockets::sockaddrs& server, const i
 	return !user->quitting;
 }
 
-void UserIOHandler::OnError(BufferedSocketError)
+void UserIOHandler::OnError(BufferedSocketError sockerr)
 {
-	ServerInstance->Users->QuitUser(user, getError());
+	ModResult res;
+	FIRST_MOD_RESULT(OnConnectionFail, res, (user, sockerr));
+	if (res != MOD_RES_ALLOW)
+		ServerInstance->Users->QuitUser(user, getError());
 }
 
 CullResult User::cull()
@@ -377,18 +373,7 @@ void User::Oper(OperInfo* info)
 	if (info->oper_block)
 		opername = info->oper_block->getString("name");
 
-	if (IS_LOCAL(this))
-	{
-		LocalUser* l = IS_LOCAL(this);
-		std::string vhost = oper->getConfig("vhost");
-		if (!vhost.empty())
-			l->ChangeDisplayedHost(vhost);
-		std::string opClass = oper->getConfig("class");
-		if (!opClass.empty())
-			l->SetClass(opClass);
-	}
-
-	ServerInstance->SNO->WriteToSnoMask('o',"%s (%s@%s) is now an IRC operator of type %s (using oper '%s')",
+	ServerInstance->SNO->WriteToSnoMask('o', "%s (%s@%s) is now a server operator of type %s (using oper '%s')",
 		nick.c_str(), ident.c_str(), GetRealHost().c_str(), oper->name.c_str(), opername.c_str());
 	this->WriteNumeric(RPL_YOUAREOPER, InspIRCd::Format("You are now %s %s", strchr("aeiouAEIOU", oper->name[0]) ? "an" : "a", oper->name.c_str()));
 
@@ -456,6 +441,13 @@ void User::UnOper()
 	 */
 	oper = NULL;
 
+	// Remove the user from the oper list
+	stdalgo::vector::swaperase(ServerInstance->Users->all_opers, this);
+
+	// If the user is quitting we shouldn't remove any modes as it results in
+	// mode messages being broadcast across the network.
+	if (quitting)
+		return;
 
 	/* Remove all oper only modes from the user when the deoper - Bug #466*/
 	Modes::ChangeList changelist;
@@ -468,9 +460,6 @@ void User::UnOper()
 	}
 
 	ServerInstance->Modes->Process(this, NULL, this, changelist);
-
-	// Remove the user from the oper list
-	stdalgo::vector::swaperase(ServerInstance->Users->all_opers, this);
 
 	ModeHandler* opermh = ServerInstance->Modes->FindMode('o', MODETYPE_USER);
 	if (opermh)
@@ -502,19 +491,25 @@ void LocalUser::CheckClass(bool clone_count)
 		{
 			ServerInstance->Users->QuitUser(this, "No more connections allowed from your host via this connect class (local)");
 			if (a->maxconnwarn)
-				ServerInstance->SNO->WriteToSnoMask('a', "WARNING: maximum LOCAL connections (%ld) exceeded for IP %s", a->GetMaxLocal(), this->GetIPString().c_str());
+			{
+				ServerInstance->SNO->WriteToSnoMask('a', "WARNING: maximum local connections for the %s class (%ld) exceeded by %s",
+					a->name.c_str(), a->GetMaxLocal(), this->GetIPString().c_str());
+			}
 			return;
 		}
 		else if ((a->GetMaxGlobal()) && (clonecounts.global > a->GetMaxGlobal()))
 		{
 			ServerInstance->Users->QuitUser(this, "No more connections allowed from your host via this connect class (global)");
 			if (a->maxconnwarn)
-				ServerInstance->SNO->WriteToSnoMask('a', "WARNING: maximum GLOBAL connections (%ld) exceeded for IP %s", a->GetMaxGlobal(), this->GetIPString().c_str());
+			{
+				ServerInstance->SNO->WriteToSnoMask('a', "WARNING: maximum global connections for the %s class (%ld) exceeded by %s",
+				a->name.c_str(), a->GetMaxGlobal(), this->GetIPString().c_str());
+			}
 			return;
 		}
 	}
 
-	this->nping = ServerInstance->Time() + a->GetPingTime();
+	this->nextping = ServerInstance->Time() + a->GetPingTime();
 }
 
 bool LocalUser::CheckLines(bool doZline)
@@ -571,7 +566,7 @@ void LocalUser::FullConnect()
 	FOREACH_MOD(OnPostConnect, (this));
 
 	ServerInstance->SNO->WriteToSnoMask('c',"Client connecting on port %d (class %s): %s (%s) [%s]",
-		this->GetServerPort(), this->MyClass->name.c_str(), GetFullRealHost().c_str(), this->GetIPString().c_str(), this->GetRealName().c_str());
+		this->server_sa.port(), this->MyClass->name.c_str(), GetFullRealHost().c_str(), this->GetIPString().c_str(), this->GetRealName().c_str());
 	ServerInstance->Logs->Log("BANCACHE", LOG_DEBUG, "BanCache: Adding NEGATIVE hit for " + this->GetIPString());
 	ServerInstance->BanCache.AddHit(this->GetIPString(), "", "");
 	// reset the flood penalty (which could have been raised due to things like auto +x)
@@ -665,11 +660,6 @@ void LocalUser::OverruleNick()
 	// Clear the bit before calling ChangeNick() to make it NOT run the OnUserPostNick() hook
 	this->registered &= ~REG_NICK;
 	this->ChangeNick(this->uuid);
-}
-
-int LocalUser::GetServerPort()
-{
-	return this->server_sa.port();
 }
 
 const std::string& User::GetIPString()
@@ -1013,7 +1003,7 @@ bool User::ChangeDisplayedHost(const std::string& shost)
 
 	this->InvalidateCache();
 
-	if (IS_LOCAL(this))
+	if (IS_LOCAL(this) && this->registered != REG_NONE)
 		this->WriteNumeric(RPL_YOURDISPLAYEDHOST, this->GetDisplayedHost(), "is now your displayed host");
 
 	return true;
@@ -1132,7 +1122,7 @@ void LocalUser::SetClass(const std::string &explicit_name)
 			if (!c->ports.empty())
 			{
 				/* and our port doesn't match, fail. */
-				if (!c->ports.count(this->GetServerPort()))
+				if (!c->ports.count(this->server_sa.port()))
 				{
 					ServerInstance->Logs->Log("CONNECTCLASS", LOG_DEBUG, "Requires a different port, skipping");
 					continue;

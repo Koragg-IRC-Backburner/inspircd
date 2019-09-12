@@ -33,7 +33,7 @@ class CommandSamode : public Command
 	CommandSamode(Module* Creator) : Command(Creator,"SAMODE", 2)
 	{
 		allow_empty_last_param = false;
-		flags_needed = 'o'; syntax = "<target> <modes> {<mode-parameters>}";
+		flags_needed = 'o'; syntax = "<target> (+|-)<modes> [<mode-parameters>]";
 		active = false;
 	}
 
@@ -49,8 +49,11 @@ class CommandSamode : public Command
 			}
 
 			// Changing the modes of another user requires a special permission
-			if ((target != user) && (!user->HasPrivPermission("users/samode-usermodes", true)))
+			if ((target != user) && (!user->HasPrivPermission("users/samode-usermodes")))
+			{
+				user->WriteNotice("*** You are not allowed to /SAMODE other users (the privilege users/samode-usermodes is needed to /SAMODE others).");
 				return CMD_FAILURE;
+			}
 		}
 
 		// XXX: Make ModeParser clear LastParse
@@ -93,7 +96,7 @@ class ModuleSaMode : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides command SAMODE to allow opers to change modes on channels and users", VF_VENDOR);
+		return Version("Provides the SAMODE command, allows opers to change modes on channels and users", VF_VENDOR);
 	}
 
 	ModResult OnPreMode(User* source, User* dest, Channel* channel, Modes::ChangeList& modes) CXX11_OVERRIDE
@@ -124,8 +127,8 @@ class ModuleSaMode : public Module
 
 	void Prioritize() CXX11_OVERRIDE
 	{
-		Module* disabled = ServerInstance->Modules->Find("m_disabled.so");
-		ServerInstance->Modules->SetPriority(this, I_OnRawMode, PRIORITY_BEFORE, disabled);
+		Module* disable = ServerInstance->Modules->Find("m_disable.so");
+		ServerInstance->Modules->SetPriority(this, I_OnRawMode, PRIORITY_BEFORE, disable);
 
 		Module *override = ServerInstance->Modules->Find("m_override.so");
 		ServerInstance->Modules->SetPriority(this, I_OnPreMode, PRIORITY_BEFORE, override);

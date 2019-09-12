@@ -59,6 +59,7 @@
 #                                                                     #
 # Syntax is as follows:                                               #
 #<include file="file.conf">                                           #
+#<include directory="modules">                                        #
 #<include executable="/path/to/executable parameters">                #
 #                                                                     #
 # Executable include example:                                         #
@@ -135,6 +136,7 @@
 #  information on how to load this module! If you do not load this    #
 #  module, server ports will NOT work!                                #
 
+# Listener that binds on a TCP/IP endpoint:
 <bind
       # address: IP address to bind to if the box that you are hosting
       # on has more than one IP, else the ircd will try to bind to all
@@ -154,7 +156,7 @@
       # ssl: If you want the port(s) in this bind tag to use SSL, set this to
       # the name of a custom <sslprofile> tag that you have defined or one
       # of "openssl", "gnutls", "mbedtls" if you have not defined any. See the
-      # wiki page for the SSL module you are using for more details.
+      # docs page for the SSL module you are using for more details.
       #
       # You will need to load the ssl_openssl module for OpenSSL, ssl_gnutls
       # for GnuTLS and ssl_mbedtls for mbedTLS.
@@ -175,8 +177,29 @@
       # whether the interface that provides the bind address is available. This
       # is useful for if you are starting InspIRCd on boot when the server may
       # not have brought the network interfaces up yet.
-      free="no"
->
+      free="no">
+
+# Listener that binds on a UNIX endpoint (not supported on Windows):
+#<bind
+
+    # path: The location to store the UNIX socket
+    #path="/tmp/inspircd.sock"
+
+    # type: Type of bind block this is. It can either be clients or
+    # servers. Whichever you select will be the only type able to connect
+    # to this bind section.
+    #type="clients"
+
+    # permissions: The octal permissions to set on the UNIX socket after it has
+    # been created. If you are not familiar with octal permissions you should
+    # not define this or refer to http://permissions-calculator.org for help.
+    #permissions=""
+
+    # replace: if the UNIX socket path already exists then remove it before
+    # attempting to create the new one. This is strongly recommended as it
+    # allows InspIRCd to create sockets in cases where it previously did not
+    # shut down cleanly and left a zombie socket behind.
+    #replace="yes">
 
 <bind address="" port="6660-6669" type="clients">
 
@@ -185,11 +208,8 @@
 # module).
 #<bind address="" port="7002" type="clients" hook="websocket">
 
-# EXPERIMENTAL: Listener that binds on a UNIX endpoint instead of a TCP/IP endpoint:
-#<bind path="/tmp/inspircd.sock" type="clients">
-
 # You can define a custom <sslprofile> tag which defines the SSL configuration
-# for this listener. See the wiki page for the SSL module you are using for
+# for this listener. See the docs page for the SSL module you are using for
 # more details.
 #
 # Alternatively, you can use one of the default SSL profiles which are created
@@ -216,7 +236,7 @@
 #  -- It is important to note that connect tags are read from the  -- #
 #     TOP DOWN. This means that you should have more specific deny    #
 #    and allow tags at the top, progressively more general, followed  #
-#        by a <connect allow="*" (should you wish to have one).       #
+#        by a <connect allow="*"> (should you wish to have one).      #
 #                                                                     #
 # Connect blocks are searched twice for each user - once when the TCP #
 # connection is accepted, and once when the user completes their      #
@@ -226,13 +246,21 @@
 # you will probably need a connect block just for user registration.  #
 # This can be done by using <connect registered="no">                 #
 
+# To enable IRCCloud on your network uncomment this:
+#<include file="examples/providers/irccloud.conf.example">
+
+# To enable KiwiIRC.com on your network uncomment this:
+#<include file="examples/providers/kiwiirc-com.conf.example">
+
+# A connect class with <connect:deny> set denies connections from the specified host/IP range.
 <connect
          # deny: Will not let people connect if they have specified host/IP.
-         deny="192.0.2.*">
+         deny="3ffe::0/32"
 
-# connect:reason is the message that users will see if they match a deny block
-<connect deny="3ffe::0/32" reason="The 6bone address space is deprecated">
+         # reason: The message that users will see if they match a deny block.
+         reason="The 6bone address space is deprecated">
 
+# A connect class with <connect:allow> set allows c from the specified host/IP range.
 <connect
          # name: Name to use for this connect block. Mainly used for
          # connect class inheriting.
@@ -255,7 +283,7 @@
          #
          # You may also use any of the above other than bcrypt prefixed with
          # either "hmac-" or "pbkdf2-hmac-" (requires the pbkdf2 module).
-         # Create hashed passwords with: /mkpasswd <hash> <password>
+         # Create hashed passwords with: /MKPASSWD <hashtype> <plaintext>
          #hash="bcrypt"
 
          # password: Password to use for this block/user(s)
@@ -268,8 +296,8 @@
          # timeout: How long the server will wait before disconnecting
          # a user if they do not do anything on connect.
          # (Note, this is a client-side thing, if the client does not
-         # send /nick, /user or /pass)
-         timeout="10"
+         # send /NICK, /USER or /PASS)
+         timeout="20"
 
          # localmax: Maximum local connections per IP (or CIDR mask, see below).
          localmax="3"
@@ -291,6 +319,10 @@
          # useident: Defines if users in this class MUST respond to a ident query or not.
          useident="no"
 
+         # usests: Whether a STS policy should be advertised to users in this class.
+         # This setting only has effect when the ircv3_sts module is loaded.
+         #usests="no"
+
          # webirc: Restricts usage of this class to the specified WebIRC gateway.
          # This setting only has effect when the cgiirc module is loaded.
          #webirc="name"
@@ -298,21 +330,31 @@
          # limit: How many users are allowed in this class
          limit="5000"
 
-         # modes: Usermodes that are set on users in this block on connect.
+         # modes: User modes that are set on users in this block on connect.
          # Enabling this option requires that the conn_umodes module be loaded.
-         # This entry is highly recommended to use for/with IP Cloaking/masking.
-         # For the example to work, this also requires that the "cloaking"
+         # This entry is highly recommended to use for/with IP cloaking/masking.
+         # For the example to work, this also requires that the cloaking
          # module be loaded as well.
          modes="+x"
 
-         # requireident, requiressl, requireaccount: require that users of this
-         # block have a valid ident response, use SSL, or have authenticated.
-         # Requires ident, sslinfo, or the services_account module, respectively.
-         requiressl="on"
-         # NOTE: For requireaccount, you must complete the signon prior to full
-         # connection. Currently, this is only possible by using SASL
-         # authentication; passforward and PRIVMSG NickServ happen after
-         # your final connect block has been found.
+         # requireident: Require that users of this block have a valid ident response.
+         # Requires the ident module to be loaded.
+         #requireident="yes"
+
+         # requiressl: Require that users of this block use an SSL connection.
+         # This can also be set to "trusted", as to only accept certificates
+         # issued by a certificate authority that you can configure in the
+         # settings of the SSL module that you're using.
+         # Requires the sslinfo module to be loaded.
+         #requiressl="yes"
+
+         # requireaccount: Require that users of this block have authenticated to a
+         # services account.
+         # NOTE: You must complete the signon prior to full connection. Currently,
+         # this is only possible by using SASL authentication; passforward
+         # and PRIVMSG NickServ happen after your final connect block has been found.
+         # Requires the services_account module to be loaded.
+         #requireaccount="yes"
 
          # Alternate MOTD file for this connect class. The contents of this file are
          # specified using <files secretmotd="filename"> or <execfiles ...>
@@ -352,8 +394,8 @@
          # timeout: How long the server will wait before disconnecting
          # a user if they do not do anything on connect.
          # (Note, this is a client-side thing, if the client does not
-         # send /nick, /user or /pass)
-         timeout="10"
+         # send /NICK, /USER or /PASS)
+         timeout="20"
 
          # pingfreq: How often the server tries to ping connecting clients.
          pingfreq="2m"
@@ -409,15 +451,20 @@
          # useident: Defines if users in this class must respond to a ident query or not.
          useident="no"
 
+         # usests: Whether a STS policy should be advertised to users in this class.
+         # This setting only has effect when the ircv3_sts module is loaded.
+         #usests="no"
+
          # limit: How many users are allowed in this class
          limit="5000"
 
-         # modes: Usermodes that are set on users in this block on connect.
+         # modes: User modes that are set on users in this block on connect.
          # Enabling this option requires that the conn_umodes module be loaded.
-         # This entry is highly recommended to use for/with IP Cloaking/masking.
+         # This entry is highly recommended to use for/with IP cloaking/masking.
          # For the example to work, this also requires that the cloaking
          # module be loaded as well.
          modes="+x">
+
 
 
 #-#-#-#-#-#-#-#-#-#-#-#-  CIDR CONFIGURATION   -#-#-#-#-#-#-#-#-#-#-#-
@@ -447,11 +494,11 @@
 
 # This file has all the information about oper classes, types and o:lines.
 # You *MUST* edit it.
-<include file="examples/opers.conf.example">
+#<include file="examples/opers.conf.example">
 
 # This file has all the information about server links and ulined servers.
 # You *MUST* edit it if you intend to link servers.
-<include file="examples/links.conf.example">
+#<include file="examples/links.conf.example">
 
 #-#-#-#-#-#-#-#-#-#-  MISCELLANEOUS CONFIGURATION  -#-#-#-#-#-#-#-#-#-#
 #                                                                     #
@@ -616,6 +663,8 @@
 
          # exemptchanops: Allows users with with a status mode to be exempt
          # from various channel restrictions. Possible restrictions are:
+         #  - anticaps        Channel mode +B - blocks messages with too many capital
+         #                    letters (requires the anticaps module).
          #  - auditorium-see  Permission required to see the full user list of
          #                    a +u channel (requires the auditorium module).
          #  - auditorium-vis  Permission required to be visible in a +u channel
@@ -647,7 +696,7 @@
          # See m_exemptchanops in modules.conf.example for more details.
          exemptchanops="censor:o filter:o nickflood:o nonick:v regmoderated:o"
 
-         # invitebypassmodes: This allows /invite to bypass other channel modes.
+         # invitebypassmodes: This allows /INVITE to bypass other channel modes.
          # (Such as +k, +j, +l, etc.)
          invitebypassmodes="yes"
 
@@ -714,10 +763,10 @@
           announceinvites="dynamic"
 
           # hideulines: If this value is set to yes, U-lined servers will
-          # be hidden from non-opers in /links and /map.
+          # be hidden from non-opers in /LINKS and /MAP.
           hideulines="no"
 
-          # flatlinks: If this value is set to yes, /map and /links will
+          # flatlinks: If this value is set to yes, /MAP and /LINKS will
           # be flattened when shown to non-opers.
           flatlinks="no"
 
@@ -734,7 +783,7 @@
           # from the server.
           hidebans="no"
 
-          # hidekills: If defined, replaces who set a /kill with a custom string.
+          # hidekills: If defined, replaces who executed a /KILL with a custom string.
           hidekills=""
 
           # hideulinekills: Hide kills from clients of ulined servers from server notices.
@@ -746,7 +795,7 @@
           hidesplits="no"
 
           # maxtargets: Maximum number of targets per command.
-          # (Commands like /notice, /privmsg, /kick, etc)
+          # (Commands like /NOTICE, /PRIVMSG, /KICK, etc)
           maxtargets="20"
 
           # customversion: A custom message to be displayed in the comments field
@@ -772,12 +821,12 @@
           restrictbannedusers="yes"
 
           # genericoper: Setting this value to yes makes all opers on this server
-          # appear as 'is an IRC operator' in their WHOIS, regardless of their
+          # appear as 'is a server operator' in their WHOIS, regardless of their
           # oper type, however oper types are still used internally. This only
           # affects the display in WHOIS.
           genericoper="no"
 
-          # userstats: /stats commands that users can run (opers can run all).
+          # userstats: /STATS commands that users can run (opers can run all).
           userstats="Pu">
 
 #-#-#-#-#-#-#-#-#-#-#-#-# LIMITS CONFIGURATION  #-#-#-#-#-#-#-#-#-#-#-#
@@ -845,7 +894,7 @@
 #
 # An example log tag would be:
 #  <log method="file" type="OPER" level="default" target="opers.log">
-# which would log all information on /oper (failed and successful) to
+# which would log all information on /OPER (failed and successful) to
 # a file called opers.log.
 #
 # There are many different types which may be used, and modules may
@@ -889,17 +938,17 @@
 
 #-#-#-#-#-#-#-#-#-#-#-#-#-  WHOWAS OPTIONS   -#-#-#-#-#-#-#-#-#-#-#-#-#
 #                                                                     #
-# This tag lets you define the behaviour of the /whowas command of    #
+# This tag lets you define the behaviour of the /WHOWAS command of    #
 # your server.                                                        #
 #                                                                     #
 
 <whowas
         # groupsize: Maximum entries per nick shown when performing
-        # a /whowas nick.
+        # a /WHOWAS <nick>.
         groupsize="10"
 
         # maxgroups: Maximum number of nickgroups that can be added to
-        # the list so that /whowas does not use a lot of resources on
+        # the list so that /WHOWAS does not use a lot of resources on
         # large networks.
         maxgroups="100000"
 
@@ -927,7 +976,7 @@
          # nick: Nick to disallow. Wildcards are supported.
          nick="ChanServ"
 
-         # reason: Reason to display on /nick.
+         # reason: Reason to display on /NICK.
          reason="Reserved for a network service">
 
 <badhost
@@ -945,9 +994,9 @@
 <exception
            # host: ident@hostname to exempt.
            # Wildcards and CIDR (if you specify an IP) can be used.
-           host="*@ircop.example.com"
+           host="*@serverop.example.com"
 
-           # reason: Reason for exception. Only shown in /stats e
+           # reason: Reason for exception. Only shown in /STATS e.
            reason="Oper's hostname">
 
 #-#-#-#-#-#-#-#-#-#-#- INSANE BAN OPTIONS  -#-#-#-#-#-#-#-#-#-#-#-#-#-#
@@ -992,7 +1041,7 @@
 # provide almost all the features of InspIRCd. :)                     #
 #                                                                     #
 # The default does nothing -- we include it for simplicity for you.   #
-<include file="examples/modules.conf.example">
+#<include file="examples/modules.conf.example">
 
 #-#-#-#-#-#-#-#-#-#-#-# SERVICES CONFIGURATION  #-#-#-#-#-#-#-#-#-#-#-#
 #                                                                     #

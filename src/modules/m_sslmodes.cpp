@@ -23,6 +23,7 @@
 
 
 #include "inspircd.h"
+#include "modules/ctctags.h"
 #include "modules/ssl.h"
 
 enum
@@ -60,15 +61,20 @@ class SSLMode : public ModeHandler
 						return MODEACTION_DENY;
 					}
 
+					unsigned long nonssl = 0;
 					const Channel::MemberMap& userlist = channel->GetUsers();
 					for (Channel::MemberMap::const_iterator i = userlist.begin(); i != userlist.end(); ++i)
 					{
 						ssl_cert* cert = API->GetCertificate(i->first);
 						if (!cert && !i->first->server->IsULine())
-						{
-							source->WriteNumeric(ERR_ALLMUSTSSL, channel->name, "all members of the channel must be connected via SSL");
-							return MODEACTION_DENY;
-						}
+							nonssl++;
+					}
+
+					if (nonssl)
+					{
+						source->WriteNumeric(ERR_ALLMUSTSSL, channel->name, InspIRCd::Format("All members of the channel must be connected via SSL (%lu/%lu are non-SSL)",
+							nonssl, static_cast<unsigned long>(userlist.size())));
+						return MODEACTION_DENY;
 					}
 				}
 				channel->SetMode(this, true);
@@ -134,7 +140,9 @@ class SSLModeUser : public ModeHandler
 	}
 };
 
-class ModuleSSLModes : public Module
+class ModuleSSLModes
+	: public Module
+	, public CTCTags::EventListener
 {
  private:
 	UserCertificateAPI api;
@@ -143,7 +151,8 @@ class ModuleSSLModes : public Module
 
  public:
 	ModuleSSLModes()
-		: api(this)
+		: CTCTags::EventListener(this)
+		, api(this)
 		, sslm(this, api)
 		, sslquery(this, api)
 	{
@@ -155,13 +164,13 @@ class ModuleSSLModes : public Module
 		{
 			if (!api)
 			{
-				user->WriteNumeric(ERR_SECUREONLYCHAN, cname, "Cannot join channel; unable to determine if you are a SSL user (+z)");
+				user->WriteNumeric(ERR_SECUREONLYCHAN, cname, "Cannot join channel; unable to determine if you are an SSL user (+z is set)");
 				return MOD_RES_DENY;
 			}
 
 			if (!api->GetCertificate(user))
 			{
-				user->WriteNumeric(ERR_SECUREONLYCHAN, cname, "Cannot join channel; SSL users only (+z)");
+				user->WriteNumeric(ERR_SECUREONLYCHAN, cname, "Cannot join channel; SSL users only (+z is set)");
 				return MOD_RES_DENY;
 			}
 		}
@@ -169,7 +178,7 @@ class ModuleSSLModes : public Module
 		return MOD_RES_PASSTHRU;
 	}
 
-	ModResult OnUserPreMessage(User* user, const MessageTarget& msgtarget, MessageDetails& details) CXX11_OVERRIDE
+	ModResult HandleMessage(User* user, const MessageTarget& msgtarget)
 	{
 		if (msgtarget.type != MessageTarget::TYPE_USER)
 			return MOD_RES_PASSTHRU;
@@ -186,7 +195,7 @@ class ModuleSSLModes : public Module
 			if (!api || !api->GetCertificate(user))
 			{
 				/* The sending user is not on an SSL connection */
-				user->WriteNumeric(ERR_CANTSENDTOUSER, target->nick, "You are not permitted to send private messages to this user (+z set)");
+				user->WriteNumeric(ERR_CANTSENDTOUSER, target->nick, "You are not permitted to send private messages to this user (+z is set)");
 				return MOD_RES_DENY;
 			}
 		}
@@ -195,12 +204,22 @@ class ModuleSSLModes : public Module
 		{
 			if (!api || !api->GetCertificate(target))
 			{
-				user->WriteNumeric(ERR_CANTSENDTOUSER, target->nick, "You must remove usermode 'z' before you are able to send private messages to a non-ssl user.");
+				user->WriteNumeric(ERR_CANTSENDTOUSER, target->nick, "You must remove user mode 'z' before you are able to send private messages to a non-SSL user.");
 				return MOD_RES_DENY;
 			}
 		}
 
 		return MOD_RES_PASSTHRU;
+	}
+
+	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target);
+	}
+
+	ModResult OnUserPreTagMessage(User* user, const MessageTarget& target, CTCTags::TagMessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target);
 	}
 
 	ModResult OnCheckBan(User *user, Channel *c, const std::string& mask) CXX11_OVERRIDE
@@ -221,7 +240,7 @@ class ModuleSSLModes : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides user and channel mode +z to allow for SSL-only channels, queries and notices.", VF_VENDOR);
+		return Version("Provides user and channel mode +z to allow for SSL-only channels, queries and notices", VF_VENDOR);
 	}
 };
 

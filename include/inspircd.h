@@ -25,6 +25,10 @@
 
 #pragma once
 
+// If the system has a pre-C11 stdint header this must be defined in
+// order to use the numeric limit macros.
+#define __STDC_LIMIT_MACROS
+
 #include <cfloat>
 #include <climits>
 #include <cmath>
@@ -300,7 +304,7 @@ class CoreExport InspIRCd
 	 */
 	std::vector<ListenSocket*> ports;
 
-	/** Set to the current signal recieved
+	/** Set to the current signal received
 	 */
 	static sig_atomic_t s_signal;
 
@@ -403,12 +407,12 @@ class CoreExport InspIRCd
 	static bool IsSID(const std::string& sid);
 
 	/** Handles incoming signals after being set
-	 * @param signal the signal recieved
+	 * @param signal the signal received
 	 */
 	void SignalHandler(int signal);
 
-	/** Sets the signal recieved
-	 * @param signal the signal recieved
+	/** Sets the signal received
+	 * @param signal the signal received
 	 */
 	static void SetSignal(int signal);
 
@@ -503,11 +507,11 @@ class CoreExport InspIRCd
 	static unsigned long Duration(const std::string& str);
 
 	/** Calculate a duration in seconds from a string in the form 1y2w3d4h6m5s
- 	 * @param str A string containing a time in the form 1y2w3d4h6m5s
- 	 * (one year, two weeks, three days, four hours, six minutes and five seconds)
- 	 * @param duration The location to place the parsed duration valur
- 	 * @return Whether the duration was a valid format or not
- 	 */
+	 * @param str A string containing a time in the form 1y2w3d4h6m5s
+	 * (one year, two weeks, three days, four hours, six minutes and five seconds)
+	 * @param duration The location to place the parsed duration valur
+	 * @return Whether the duration was a valid format or not
+	 */
 	static bool Duration(const std::string& str, unsigned long& duration);
 
 	/** Determines whether a string contains a valid duration.
@@ -515,6 +519,12 @@ class CoreExport InspIRCd
 	 * @return True if the string is a valid duration; otherwise, false.
 	 */
 	static bool IsValidDuration(const std::string& str);
+
+	/** Return a duration in seconds as a human-readable string.
+	 * @param duration The duration in seconds to convert to a human-readable string.
+	 * @return A string representing the given duration.
+	 */
+	static std::string DurationString(time_t duration);
 
 	/** Attempt to compare a password to a string from the config file.
 	 * This will be passed to handling modules which will compare the data

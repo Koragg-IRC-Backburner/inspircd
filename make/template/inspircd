@@ -50,7 +50,7 @@ use constant {
 
 my $scriptpath = "@SCRIPT_DIR@";
 my $basepath	=	"@BASE_DIR@";
-my $confpath	=	"@CONFIG_DIR@/";
+my $confpath	=	"@CONFIG_DIR@";
 my $binpath	=	"@BINARY_DIR@";
 my $runpath	=	"@BASE_DIR@";
 my $datadir	=       "@DATA_DIR@";
@@ -58,6 +58,22 @@ my $valgrindlogpath	=	"$basepath/valgrindlogs";
 my $executable	=	"inspircd";
 my $version	=	"@VERSION_FULL@";
 my $uid = "@UID@";
+
+my @gdbargs = (
+	'--eval-command', 'handle SIGPIPE pass nostop noprint',
+	'--eval-command', 'handle SIGHUP pass nostop noprint',
+	'--eval-command', 'run',
+	'--args', "$binpath/$executable", qw(--nofork --nolog --debug)
+);
+
+sub expand_fragment($$) {
+	my ($base, $fragment) = @_;
+	if ($fragment =~ /^\//) {
+		return $fragment;
+	} else {
+		return "$base/$fragment";
+	}
+}
 
 if (!(grep { $_ eq '--runasroot' } @ARGV) && ($< == 0 || $> == 0)) {
 	if ($uid !~ /^\d+$/) {
@@ -88,7 +104,7 @@ for my $a (@ARGV)
 	}
 }
 if (!defined $conf) {
-	$conf = $confpath . "inspircd.conf";
+	$conf = expand_fragment $confpath, "inspircd.conf";
 	push @ARGV, '--config='.$conf;
 }
 
@@ -204,7 +220,7 @@ sub dev_debug(@)
 	checkgdb();
 
 	# If we are still alive here.. Try starting the IRCd..
-	exec 'gdb', "--command=$scriptpath/.gdbargs", '--args', "$binpath/$executable", qw(--nofork --debug), @_;
+	exec 'gdb', @gdbargs, @_;
 	die "Failed to start GDB: $!\n";
 }
 
@@ -223,7 +239,7 @@ sub dev_screendebug(@)
 	# If we are still alive here.. Try starting the IRCd..
 	print "Starting InspIRCd in `screen`, type `screen -r` when the ircd crashes to view the gdb output and get a backtrace.\n";
 	print "Once you're inside the screen session press ^C + d to re-detach from the session\n";
-	exec qw(screen -m -d gdb), "--command=$scriptpath/.gdbargs", '-args', "$binpath/$executable", qw(--nofork --debug --nolog), @_;
+	exec qw(screen -m -d gdb), @gdbargs, @_;
 	die "Failed to start screen: $!\n";
 }
 
@@ -312,7 +328,7 @@ sub cmd_stop()
 	# Get to here, we have something to kill.
 	my $pid = getprocessid();
 	print "Stopping InspIRCd (pid: $pid)...\n";
-	my $maxwait = (`ps -o command $pid` =~ /valgrind/i) ? 90 : 15;
+	my $maxwait = (`ps -o command $pid 2>/dev/null` =~ /valgrind/i) ? 90 : 15;
 	kill TERM => $pid or die "Cannot terminate IRCd: $!\n";
 	for (1..$maxwait) {
 		sleep 1;
@@ -351,11 +367,9 @@ sub getpidfile
 	if ($pid ne "") {
 		return;
 	}
-	# Are We using a relative path?
-	if ($file !~ /^\//) {
-		# Convert it to a full path.
-		$file = $runpath .'/'. $file;
-	}
+
+	# Expand any relative paths.
+	$file = expand_fragment $confpath, $file;
 
 	# Have we checked this file before?
 	return if $filesparsed{$file};
@@ -377,16 +391,7 @@ sub getpidfile
 		if (($i =~ /<pid file=\"(\S+)\">/i) && ($i !~ /^#/))
 		{
 			# Set the PID file and return.
-			$pidfile = $1;
-			if (-f $pidfile)
-			{
-				return;
-			}
-			elsif (-f "$runpath/$pidfile")
-			{
-				$pidfile = "$runpath/$pidfile";
-				return;
-			}
+			$pidfile = expand_fragment $datadir, $1;
 			return;
 		}
 	}

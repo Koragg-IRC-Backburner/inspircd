@@ -18,6 +18,7 @@
 
 
 #include "inspircd.h"
+#include "modules/ctctags.h"
 
 class DelayMsgMode : public ParamMode<DelayMsgMode, LocalIntExt>
 {
@@ -28,11 +29,12 @@ class DelayMsgMode : public ParamMode<DelayMsgMode, LocalIntExt>
 		, jointime("delaymsg", ExtensionItem::EXT_MEMBERSHIP, Parent)
 	{
 		ranktoset = ranktounset = OP_VALUE;
+		syntax = "<seconds>";
 	}
 
 	bool ResolveModeConflict(std::string& their_param, const std::string& our_param, Channel*) CXX11_OVERRIDE
 	{
-		return (atoi(their_param.c_str()) < atoi(our_param.c_str()));
+		return ConvToNum<intptr_t>(their_param) < ConvToNum<intptr_t>(our_param);
 	}
 
 	ModeAction OnSet(User* source, Channel* chan, std::string& parameter) CXX11_OVERRIDE;
@@ -44,18 +46,26 @@ class DelayMsgMode : public ParamMode<DelayMsgMode, LocalIntExt>
 	}
 };
 
-class ModuleDelayMsg : public Module
+class ModuleDelayMsg
+	: public Module
+	, public CTCTags::EventListener
 {
+ private:
 	DelayMsgMode djm;
 	bool allownotice;
+	ModResult HandleMessage(User* user, const MessageTarget& target, bool notice);
+
  public:
-	ModuleDelayMsg() : djm(this)
+	ModuleDelayMsg()
+		: CTCTags::EventListener(this)
+		, djm(this)
 	{
 	}
 
 	Version GetVersion() CXX11_OVERRIDE;
 	void OnUserJoin(Membership* memb, bool sync, bool created, CUList&) CXX11_OVERRIDE;
 	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE;
+	ModResult OnUserPreTagMessage(User* user, const MessageTarget& target, CTCTags::TagMessageDetails& details) CXX11_OVERRIDE;
 	void ReadConfig(ConfigStatus& status) CXX11_OVERRIDE;
 };
 
@@ -82,7 +92,7 @@ void DelayMsgMode::OnUnset(User* source, Channel* chan)
 
 Version ModuleDelayMsg::GetVersion()
 {
-	return Version("Provides channelmode +d <int>, to deny messages to a channel until <int> seconds.", VF_VENDOR);
+	return Version("Provides channel mode +d <int>, to deny messages to a channel until <int> seconds have passed", VF_VENDOR);
 }
 
 void ModuleDelayMsg::OnUserJoin(Membership* memb, bool sync, bool created, CUList&)
@@ -95,10 +105,20 @@ void ModuleDelayMsg::OnUserJoin(Membership* memb, bool sync, bool created, CULis
 
 ModResult ModuleDelayMsg::OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details)
 {
+	return HandleMessage(user, target, details.type == MSG_NOTICE);
+}
+
+ModResult ModuleDelayMsg::OnUserPreTagMessage(User* user, const MessageTarget& target, CTCTags::TagMessageDetails& details)
+{
+	return HandleMessage(user, target, false);
+}
+
+ModResult ModuleDelayMsg::HandleMessage(User* user, const MessageTarget& target, bool notice)
+{
 	if (!IS_LOCAL(user))
 		return MOD_RES_PASSTHRU;
 
-	if ((target.type != MessageTarget::TYPE_CHANNEL) || ((!allownotice) && (details.type == MSG_NOTICE)))
+	if ((target.type != MessageTarget::TYPE_CHANNEL) || ((!allownotice) && (notice)))
 		return MOD_RES_PASSTHRU;
 
 	Channel* channel = target.Get<Channel>();
@@ -118,7 +138,7 @@ ModResult ModuleDelayMsg::OnUserPreMessage(User* user, const MessageTarget& targ
 	{
 		if (channel->GetPrefixValue(user) < VOICE_VALUE)
 		{
-			user->WriteNumeric(ERR_CANNOTSENDTOCHAN, channel->name, InspIRCd::Format("You must wait %d seconds after joining to send to channel (+d)", len));
+			user->WriteNumeric(ERR_CANNOTSENDTOCHAN, channel->name, InspIRCd::Format("You must wait %d seconds after joining to send to the channel (+d is set)", len));
 			return MOD_RES_DENY;
 		}
 	}

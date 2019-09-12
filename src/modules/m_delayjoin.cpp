@@ -21,6 +21,8 @@
 
 
 #include "inspircd.h"
+#include "modules/ctctags.h"
+#include "modules/names.h"
 
 class DelayJoinMode : public ModeHandler
 {
@@ -72,7 +74,10 @@ class JoinHook : public ClientProtocol::EventHook
 
 }
 
-class ModuleDelayJoin : public Module
+class ModuleDelayJoin 
+	: public Module
+	, public CTCTags::EventListener
+	, public Names::EventListener
 {
  public:
 	LocalIntExt unjoined;
@@ -80,20 +85,23 @@ class ModuleDelayJoin : public Module
 	DelayJoinMode djm;
 
 	ModuleDelayJoin()
-		: unjoined("delayjoin", ExtensionItem::EXT_MEMBERSHIP, this)
+		: CTCTags::EventListener(this)
+		, Names::EventListener(this)
+		, unjoined("delayjoin", ExtensionItem::EXT_MEMBERSHIP, this)
 		, joinhook(this, unjoined)
 		, djm(this, unjoined)
 	{
 	}
 
 	Version GetVersion() CXX11_OVERRIDE;
-	ModResult OnNamesListItem(User* issuer, Membership*, std::string& prefixes, std::string& nick) CXX11_OVERRIDE;
+	ModResult OnNamesListItem(LocalUser* issuer, Membership*, std::string& prefixes, std::string& nick) CXX11_OVERRIDE;
 	void OnUserJoin(Membership*, bool, bool, CUList&) CXX11_OVERRIDE;
 	void CleanUser(User* user);
 	void OnUserPart(Membership*, std::string &partmessage, CUList&) CXX11_OVERRIDE;
 	void OnUserKick(User* source, Membership*, const std::string &reason, CUList&) CXX11_OVERRIDE;
 	void OnBuildNeighborList(User* source, IncludeChanList& include, std::map<User*, bool>& exception) CXX11_OVERRIDE;
 	void OnUserMessage(User* user, const MessageTarget& target, const MessageDetails& details) CXX11_OVERRIDE;
+	void OnUserTagMessage(User* user, const MessageTarget& target, const CTCTags::TagMessageDetails& details) CXX11_OVERRIDE;
 	ModResult OnRawMode(User* user, Channel* channel, ModeHandler* mh, const std::string& param, bool adding) CXX11_OVERRIDE;
 };
 
@@ -119,10 +127,10 @@ ModeAction DelayJoinMode::OnModeChange(User* source, User* dest, Channel* channe
 
 Version ModuleDelayJoin::GetVersion()
 {
-	return Version("Allows for delay-join channels (+D) where users don't appear to join until they speak", VF_VENDOR);
+	return Version("Provides channel mode +D, delay-join, users don't appear as joined to others until they speak", VF_VENDOR);
 }
 
-ModResult ModuleDelayJoin::OnNamesListItem(User* issuer, Membership* memb, std::string& prefixes, std::string& nick)
+ModResult ModuleDelayJoin::OnNamesListItem(LocalUser* issuer, Membership* memb, std::string& prefixes, std::string& nick)
 {
 	/* don't prevent the user from seeing themself */
 	if (issuer == memb->user)
@@ -176,6 +184,15 @@ void ModuleDelayJoin::OnBuildNeighborList(User* source, IncludeChanList& include
 	}
 }
 
+void ModuleDelayJoin::OnUserTagMessage(User* user, const MessageTarget& target, const CTCTags::TagMessageDetails& details)
+{
+	if (target.type != MessageTarget::TYPE_CHANNEL)
+		return;
+
+	Channel* channel = target.Get<Channel>();
+	djm.RevealUser(user, channel);
+}
+
 void ModuleDelayJoin::OnUserMessage(User* user, const MessageTarget& target, const MessageDetails& details)
 {
 	if (target.type != MessageTarget::TYPE_CHANNEL)
@@ -198,7 +215,7 @@ void DelayJoinMode::RevealUser(User* user, Channel* chan)
 	chan->Write(joinevent, 0, except_list);
 }
 
-/* make the user visible if he receives any mode change */
+/* make the user visible if they receive any mode change */
 ModResult ModuleDelayJoin::OnRawMode(User* user, Channel* channel, ModeHandler* mh, const std::string& param, bool adding)
 {
 	if (!channel || param.empty())

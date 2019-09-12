@@ -132,6 +132,9 @@ PATH OPTIONS
   --data-dir=[dir]              The location where the data files, such as the
                                 pid file, are stored.
                                 [$PWD/run/data]
+  --example-dir=[dir]           The location where the example configuration files
+                                and SQL schemas are stored.
+                                [$PWD/run/conf/examples]
   --log-dir=[dir]               The location where the log files are stored.
                                 [$PWD/run/logs]
   --manual-dir=[dir]            The location where the manual files are stored.
@@ -154,6 +157,8 @@ MISC OPTIONS
 
   --clean                       Remove the configuration cache file and start
                                 the interactive configuration wizard.
+  --disable-auto-extras         Disables automatically enabling extra modules
+                                for which the dependencies are available.
   --disable-interactive         Disables the interactive configuration wizard.
   --distribution-label=[text]   Sets a distribution specific version label in
                                 the build configuration.
@@ -279,21 +284,21 @@ sub parse_templates($$$) {
 			}
 
 			# Does this line match a directive?
-			if ($line =~ /^\s*%(\w+)\s+(.+)$/) {
-				if ($1 eq 'define') {
-					if ($settings{$2}) {
-						push @lines, "#define $2";
+			if ($line =~ /^(\s*)%(\w+)\s+(.+)$/) {
+				if ($2 eq 'define') {
+					if ($settings{$3}) {
+						push @lines, "#$1define $3";
 					} else {
-						push @lines, "#undef $2";
+						push @lines, "#$1undef $3";
 					}
-				} elsif ($1 eq 'mode') {
-					$mode = oct $2;
-				} elsif ($1 eq 'platform') {
-					push @platforms, $2;
-				} elsif ($1 eq 'target') {
-					push @targets, $2
+				} elsif ($2 eq 'mode') {
+					$mode = oct $3;
+				} elsif ($2 eq 'platform') {
+					push @platforms, $3;
+				} elsif ($2 eq 'target') {
+					push @targets, $3
 				} else {
-					print_warning "unknown template command '$1' in $_!";
+					print_warning "unknown template command '$2' in $_!";
 					push @lines, $line;
 				}
 				next;

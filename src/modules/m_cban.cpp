@@ -88,7 +88,7 @@ class CommandCBan : public Command
  public:
 	CommandCBan(Module* Creator) : Command(Creator, "CBAN", 1, 3)
 	{
-		flags_needed = 'o'; this->syntax = "<channel> [<duration> :<reason>]";
+		flags_needed = 'o'; this->syntax = "<channel> [<duration> [:<reason>]]";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -106,7 +106,7 @@ class CommandCBan : public Command
 			}
 			else
 			{
-				user->WriteNotice("*** CBan " + parameters[0] + " not found in list, try /stats C.");
+				user->WriteNotice("*** CBan " + parameters[0] + " not found on the list.");
 				return CMD_FAILURE;
 			}
 		}
@@ -130,9 +130,9 @@ class CommandCBan : public Command
 				}
 				else
 				{
-					time_t c_requires_crap = duration + ServerInstance->Time();
-					std::string timestr = InspIRCd::TimeString(c_requires_crap);
-					ServerInstance->SNO->WriteGlobalSno('x', "%s added timed CBan for %s, expires on %s: %s", user->nick.c_str(), parameters[0].c_str(), timestr.c_str(), reason);
+					ServerInstance->SNO->WriteGlobalSno('x', "%s added timed CBan for %s, expires in %s (on %s): %s",
+						user->nick.c_str(), parameters[0].c_str(), InspIRCd::DurationString(duration).c_str(),
+						InspIRCd::TimeString(ServerInstance->Time() + duration).c_str(), reason);
 				}
 			}
 			else
@@ -204,7 +204,7 @@ class ModuleCBan : public Module, public Stats::EventListener
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Gives /cban, aka C-lines. Think Q-lines, for channels.", VF_COMMON | VF_VENDOR);
+		return Version("Provides the CBAN command, like Q-lines, but for channels", VF_COMMON | VF_VENDOR);
 	}
 };
 

@@ -25,7 +25,6 @@
 #include "socket.h"
 #include "xline.h"
 #include "iohook.h"
-#include "modules/server.h"
 
 #include "resolvers.h"
 #include "main.h"
@@ -39,12 +38,17 @@
 ModuleSpanningTree::ModuleSpanningTree()
 	: Away::EventListener(this)
 	, Stats::EventListener(this)
+	, CTCTags::EventListener(this)
 	, rconnect(this)
 	, rsquit(this)
 	, map(this)
 	, commands(this)
 	, currmembid(0)
-	, eventprov(this, "event/server")
+	, broadcasteventprov(this, "event/server-broadcast")
+	, linkeventprov(this, "event/server-link")
+	, messageeventprov(this, "event/server-message")
+	, synceventprov(this, "event/server-sync")
+	, sslapi(this)
 	, DNS(this, "DNS")
 	, tagevprov(this, "event/messagetag")
 	, loopCall(false)
@@ -144,20 +148,6 @@ void ModuleSpanningTree::HandleLinks(const CommandBase::Params& parameters, User
 	user->WriteNumeric(RPL_ENDOFLINKS, '*', "End of /LINKS list.");
 }
 
-std::string ModuleSpanningTree::TimeToStr(time_t secs)
-{
-	time_t mins_up = secs / 60;
-	time_t hours_up = mins_up / 60;
-	time_t days_up = hours_up / 24;
-	secs = secs % 60;
-	mins_up = mins_up % 60;
-	hours_up = hours_up % 24;
-	return ((days_up ? (ConvToStr(days_up) + "d") : "")
-			+ (hours_up ? (ConvToStr(hours_up) + "h") : "")
-			+ (mins_up ? (ConvToStr(mins_up) + "m") : "")
-			+ ConvToStr(secs) + "s");
-}
-
 void ModuleSpanningTree::ConnectServer(Autoconnect* a, bool on_timer)
 {
 	if (!a)
@@ -197,40 +187,35 @@ void ModuleSpanningTree::ConnectServer(Autoconnect* a, bool on_timer)
 
 void ModuleSpanningTree::ConnectServer(Link* x, Autoconnect* y)
 {
-	bool ipvalid = true;
-
 	if (InspIRCd::Match(ServerInstance->Config->ServerName, x->Name, ascii_case_insensitive_map))
 	{
 		ServerInstance->SNO->WriteToSnoMask('l', "CONNECT: Not connecting to myself.");
 		return;
 	}
 
-#ifndef _WIN32
+	irc::sockets::sockaddrs sa;
 	if (x->IPAddr.find('/') != std::string::npos)
 	{
-		struct stat sb;
-		if (stat(x->IPAddr.c_str(), &sb) == -1 || !S_ISSOCK(sb.st_mode))
-			ipvalid = false;
-	}
-#endif
-	if (x->IPAddr.find(':') != std::string::npos)
-	{
-		in6_addr n;
-		if (inet_pton(AF_INET6, x->IPAddr.c_str(), &n) < 1)
-			ipvalid = false;
+		if (!irc::sockets::isunix(x->IPAddr) || !irc::sockets::untosa(x->IPAddr, sa))
+		{
+			// We don't use the family() != AF_UNSPEC check below for UNIX sockets as
+			// that results in a DNS lookup.
+			ServerInstance->SNO->WriteToSnoMask('l', "CONNECT: Error connecting \002%s\002: %s is not a UNIX socket!",
+				x->Name.c_str(), x->IPAddr.c_str());
+			return;
+		}
 	}
 	else
 	{
-		in_addr n;
-		if (inet_pton(AF_INET, x->IPAddr.c_str(),&n) < 1)
-			ipvalid = false;
+		// If this fails then the IP sa will be AF_UNSPEC.
+		irc::sockets::aptosa(x->IPAddr, x->Port, sa);
 	}
-
+	
 	/* Do we already have an IP? If so, no need to resolve it. */
-	if (ipvalid)
+	if (sa.family() != AF_UNSPEC)
 	{
 		// Create a TreeServer object that will start connecting immediately in the background
-		TreeSocket* newsocket = new TreeSocket(x, y, x->IPAddr);
+		TreeSocket* newsocket = new TreeSocket(x, y, sa);
 		if (newsocket->GetFd() > -1)
 		{
 			/* Handled automatically on success */
@@ -374,10 +359,10 @@ void ModuleSpanningTree::OnUserInvite(User* source, User* dest, Channel* channel
 	if (IS_LOCAL(source))
 	{
 		CmdBuilder params(source, "INVITE");
-		params.push_back(dest->uuid);
-		params.push_back(channel->name);
+		params.push(dest->uuid);
+		params.push(channel->name);
 		params.push_int(channel->age);
-		params.push_back(ConvToStr(expiry));
+		params.push(ConvToStr(expiry));
 		params.Broadcast();
 	}
 }
@@ -409,30 +394,72 @@ void ModuleSpanningTree::OnUserPostMessage(User* user, const MessageTarget& targ
 		return;
 
 	const char* message_type = (details.type == MSG_PRIVMSG ? "PRIVMSG" : "NOTICE");
-	if (target.type == MessageTarget::TYPE_USER)
+	switch (target.type)
 	{
-		User* d = target.Get<User>();
-		if (!IS_LOCAL(d))
+		case MessageTarget::TYPE_USER:
 		{
-			CmdBuilder params(user, message_type);
-			params.push_tags(details.tags_out);
-			params.push_back(d->uuid);
-			params.push_last(details.text);
-			params.Unicast(d);
+			User* d = target.Get<User>();
+			if (!IS_LOCAL(d))
+			{
+				CmdBuilder params(user, message_type);
+				params.push_tags(details.tags_out);
+				params.push(d->uuid);
+				params.push_last(details.text);
+				params.Unicast(d);
+			}
+			break;
+		}
+		case MessageTarget::TYPE_CHANNEL:
+		{
+			Utils->SendChannelMessage(user, target.Get<Channel>(), details.text, target.status, details.tags_out, details.exemptions, message_type);
+			break;
+		}
+		case MessageTarget::TYPE_SERVER:
+		{
+			const std::string* serverglob = target.Get<std::string>();
+			CmdBuilder par(user, message_type);
+			par.push_tags(details.tags_out);
+			par.push(*serverglob);
+			par.push_last(details.text);
+			par.Broadcast();
+			break;
 		}
 	}
-	else if (target.type == MessageTarget::TYPE_CHANNEL)
+}
+
+void ModuleSpanningTree::OnUserPostTagMessage(User* user, const MessageTarget& target, const CTCTags::TagMessageDetails& details)
+{
+	if (!IS_LOCAL(user))
+		return;
+
+	switch (target.type)
 	{
-		Utils->SendChannelMessage(user->uuid, target.Get<Channel>(), details.text, target.status, details.tags_out, details.exemptions, message_type);
-	}
-	else if (target.type == MessageTarget::TYPE_SERVER)
-	{
-		const std::string* serverglob = target.Get<std::string>();
-		CmdBuilder par(user, message_type);
-		par.push_tags(details.tags_out);
-		par.push_back(*serverglob);
-		par.push_last(details.text);
-		par.Broadcast();
+		case MessageTarget::TYPE_USER:
+		{
+			User* d = target.Get<User>();
+			if (!IS_LOCAL(d))
+			{
+				CmdBuilder params(user, "TAGMSG");
+				params.push_tags(details.tags_out);
+				params.push(d->uuid);
+				params.Unicast(d);
+			}
+			break;
+		}
+		case MessageTarget::TYPE_CHANNEL:
+		{
+			Utils->SendChannelMessage(user, target.Get<Channel>(), "", target.status, details.tags_out, details.exemptions, "TAGMSG");
+			break;
+		}
+		case MessageTarget::TYPE_SERVER:
+		{
+			const std::string* serverglob = target.Get<std::string>();
+			CmdBuilder par(user, "TAGMSG");
+			par.push_tags(details.tags_out);
+			par.push(*serverglob);
+			par.Broadcast();
+			break;
+		}
 	}
 }
 
@@ -447,6 +474,10 @@ void ModuleSpanningTree::OnUserConnect(LocalUser* user)
 	if (user->quitting)
 		return;
 
+	// Create the lazy ssl_cert metadata for this user if not already created.
+	if (sslapi)
+		sslapi->GetCertificate(user);
+
 	CommandUID::Builder(user).Broadcast();
 
 	if (user->IsOper())
@@ -455,7 +486,7 @@ void ModuleSpanningTree::OnUserConnect(LocalUser* user)
 	for(Extensible::ExtensibleStore::const_iterator i = user->GetExtList().begin(); i != user->GetExtList().end(); i++)
 	{
 		ExtensionItem* item = i->first;
-		std::string value = item->serialize(FORMAT_NETWORK, user, i->second);
+		std::string value = item->ToNetwork(user, i->second);
 		if (!value.empty())
 			ServerInstance->PI->SendMetaData(user, item->name, value);
 	}
@@ -482,12 +513,12 @@ void ModuleSpanningTree::OnUserJoin(Membership* memb, bool sync, bool created_by
 	else
 	{
 		CmdBuilder params(memb->user, "IJOIN");
-		params.push_back(memb->chan->name);
+		params.push(memb->chan->name);
 		params.push_int(memb->id);
 		if (!memb->modes.empty())
 		{
-			params.push_back(ConvToStr(memb->chan->age));
-			params.push_back(memb->modes);
+			params.push(ConvToStr(memb->chan->age));
+			params.push(memb->modes);
 		}
 		params.Broadcast();
 	}
@@ -522,7 +553,7 @@ void ModuleSpanningTree::OnUserPart(Membership* memb, std::string &partmessage, 
 	if (IS_LOCAL(memb->user))
 	{
 		CmdBuilder params(memb->user, "PART");
-		params.push_back(memb->chan->name);
+		params.push(memb->chan->name);
 		if (!partmessage.empty())
 			params.push_last(partmessage);
 		params.Broadcast();
@@ -562,8 +593,8 @@ void ModuleSpanningTree::OnUserPostNick(User* user, const std::string &oldnick)
 	{
 		// The nick TS is updated by the core, we don't do it
 		CmdBuilder params(user, "NICK");
-		params.push_back(user->nick);
-		params.push_back(ConvToStr(user->age));
+		params.push(user->nick);
+		params.push(ConvToStr(user->age));
 		params.Broadcast();
 	}
 	else if (!loopCall)
@@ -578,8 +609,8 @@ void ModuleSpanningTree::OnUserKick(User* source, Membership* memb, const std::s
 		return;
 
 	CmdBuilder params(source, "KICK");
-	params.push_back(memb->chan->name);
-	params.push_back(memb->user->uuid);
+	params.push(memb->chan->name);
+	params.push(memb->user->uuid);
 	// If a remote user is being kicked by us then send the membership id in the kick too
 	if (!IS_LOCAL(memb->user))
 		params.push_int(memb->id);
@@ -594,8 +625,8 @@ void ModuleSpanningTree::OnPreRehash(User* user, const std::string &parameter)
 	// Send out to other servers
 	if (!parameter.empty() && parameter[0] != '-')
 	{
-		CmdBuilder params((user ? user->uuid : ServerInstance->Config->GetSID()), "REHASH");
-		params.push_back(parameter);
+		CmdBuilder params(user ? user : ServerInstance->FakeClient, "REHASH");
+		params.push(parameter);
 		params.Forward(user ? TreeServer::Get(user)->GetRoute() : NULL);
 	}
 }
@@ -658,7 +689,7 @@ void ModuleSpanningTree::OnUnloadModule(Module* mod)
 		{
 			TreeServer* server = i->second;
 			if (!server->IsRoot())
-				FOREACH_MOD_CUSTOM(GetEventProvider(), ServerEventListener, OnServerSplit, (server));
+				FOREACH_MOD_CUSTOM(GetLinkEventProvider(), ServerProtocol::LinkEventListener, OnServerSplit, (server));
 		}
 		return;
 	}
@@ -718,8 +749,8 @@ void ModuleSpanningTree::OnDelLine(User* user, XLine *x)
 		user = ServerInstance->FakeClient;
 
 	CmdBuilder params(user, "DELLINE");
-	params.push_back(x->type);
-	params.push_back(x->Displayable());
+	params.push(x->type);
+	params.push(x->Displayable());
 	params.Broadcast();
 }
 

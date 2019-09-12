@@ -80,9 +80,9 @@ class RLine : public XLine
 			ZLine* zl = new ZLine(ServerInstance->Time(), duration ? expiry - ServerInstance->Time() : 0, ServerInstance->Config->ServerName.c_str(), reason.c_str(), u->GetIPString());
 			if (ServerInstance->XLines->AddLine(zl, NULL))
 			{
-				std::string timestr = InspIRCd::TimeString(zl->expiry);
-				ServerInstance->SNO->WriteToSnoMask('x', "Z-line added due to R-line match on %s%s%s: %s",
-					zl->ipaddr.c_str(), zl->duration ? " to expire on " : "", zl->duration ? timestr.c_str() : "", zl->reason.c_str());
+				std::string expirystr = zl->duration ? InspIRCd::Format(" to expire in %s (on %s)", InspIRCd::DurationString(zl->duration).c_str(), InspIRCd::TimeString(zl->expiry).c_str()) : "";
+				ServerInstance->SNO->WriteToSnoMask('x', "Z-line added due to R-line match on %s%s: %s",
+					zl->ipaddr.c_str(), expirystr.c_str(), zl->reason.c_str());
 				added_zline = true;
 			}
 			else
@@ -137,7 +137,7 @@ class CommandRLine : public Command
  public:
 	CommandRLine(Module* Creator, RLineFactory& rlf) : Command(Creator,"RLINE", 1, 3), factory(rlf)
 	{
-		flags_needed = 'o'; this->syntax = "<regex> [<rline-duration>] :<reason>";
+		flags_needed = 'o'; this->syntax = "<regex> [<duration> :<reason>]";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -161,7 +161,7 @@ class CommandRLine : public Command
 			}
 			catch (ModuleException &e)
 			{
-				ServerInstance->SNO->WriteToSnoMask('a',"Could not add RLINE: " + e.GetReason());
+				ServerInstance->SNO->WriteToSnoMask('a', "Could not add R-line: " + e.GetReason());
 			}
 
 			if (r)
@@ -170,13 +170,13 @@ class CommandRLine : public Command
 				{
 					if (!duration)
 					{
-						ServerInstance->SNO->WriteToSnoMask('x',"%s added permanent R-line for %s: %s", user->nick.c_str(), parameters[0].c_str(), parameters[2].c_str());
+						ServerInstance->SNO->WriteToSnoMask('x', "%s added permanent R-line for %s: %s", user->nick.c_str(), parameters[0].c_str(), parameters[2].c_str());
 					}
 					else
 					{
-						time_t c_requires_crap = duration + ServerInstance->Time();
-						std::string timestr = InspIRCd::TimeString(c_requires_crap);
-						ServerInstance->SNO->WriteToSnoMask('x', "%s added timed R-line for %s to expire on %s: %s", user->nick.c_str(), parameters[0].c_str(), timestr.c_str(), parameters[2].c_str());
+						ServerInstance->SNO->WriteToSnoMask('x', "%s added timed R-line for %s, expires in %s (on %s): %s",
+							user->nick.c_str(), parameters[0].c_str(), InspIRCd::DurationString(duration).c_str(),
+							InspIRCd::TimeString(ServerInstance->Time() + duration).c_str(), parameters[2].c_str());
 					}
 
 					ServerInstance->XLines->ApplyLines();
@@ -198,7 +198,7 @@ class CommandRLine : public Command
 			}
 			else
 			{
-				user->WriteNotice("*** R-line " + parameters[0] + " not found in list, try /stats R.");
+				user->WriteNotice("*** R-line " + parameters[0] + " not found on the list.");
 			}
 		}
 
@@ -246,7 +246,7 @@ class ModuleRLine : public Module, public Stats::EventListener
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("RLINE: Regexp user banning.", VF_COMMON | VF_VENDOR, rxfactory ? rxfactory->name : "");
+		return Version("Provides support for banning users through regular expression patterns", VF_COMMON | VF_VENDOR, rxfactory ? rxfactory->name : "");
 	}
 
 	ModResult OnUserRegister(LocalUser* user) CXX11_OVERRIDE

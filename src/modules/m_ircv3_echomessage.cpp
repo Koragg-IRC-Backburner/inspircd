@@ -20,14 +20,21 @@
 
 #include "inspircd.h"
 #include "modules/cap.h"
+#include "modules/ctctags.h"
 
-class ModuleIRCv3EchoMessage : public Module
+class ModuleIRCv3EchoMessage
+	: public Module
+	, public CTCTags::EventListener
 {
+ private:
 	Cap::Capability cap;
+	ClientProtocol::EventProvider tagmsgprov;
 
  public:
 	ModuleIRCv3EchoMessage()
-		: cap(this, "echo-message")
+		: CTCTags::EventListener(this)
+		, cap(this, "echo-message")
+		, tagmsgprov(this, "TAGMSG")
 	{
 	}
 
@@ -41,26 +48,67 @@ class ModuleIRCv3EchoMessage : public Module
 
 		const std::string& text = details.echo_original ? details.original_text : details.text;
 		const ClientProtocol::TagMap& tags = details.echo_original ? details.tags_in : details.tags_out;
-		if (target.type == MessageTarget::TYPE_USER)
+		switch (target.type)
 		{
-			User* destuser = target.Get<User>();
-			ClientProtocol::Messages::Privmsg privmsg(ClientProtocol::Messages::Privmsg::nocopy, user, destuser, text, details.type);
-			privmsg.AddTags(tags);
-			localuser->Send(ServerInstance->GetRFCEvents().privmsg, privmsg);
+			case MessageTarget::TYPE_USER:
+			{
+				User* destuser = target.Get<User>();
+				ClientProtocol::Messages::Privmsg privmsg(ClientProtocol::Messages::Privmsg::nocopy, user, destuser, text, details.type);
+				privmsg.AddTags(tags);
+				localuser->Send(ServerInstance->GetRFCEvents().privmsg, privmsg);
+				break;
+			}
+			case MessageTarget::TYPE_CHANNEL:
+			{
+				Channel* chan = target.Get<Channel>();
+				ClientProtocol::Messages::Privmsg privmsg(ClientProtocol::Messages::Privmsg::nocopy, user, chan, text, details.type, target.status);
+				privmsg.AddTags(tags);
+				localuser->Send(ServerInstance->GetRFCEvents().privmsg, privmsg);
+				break;
+			}
+			case MessageTarget::TYPE_SERVER:
+			{
+				const std::string* servername = target.Get<std::string>();
+				ClientProtocol::Messages::Privmsg privmsg(ClientProtocol::Messages::Privmsg::nocopy, user, *servername, text, details.type);
+				privmsg.AddTags(tags);
+				localuser->Send(ServerInstance->GetRFCEvents().privmsg, privmsg);
+				break;
+			}
 		}
-		else if (target.type == MessageTarget::TYPE_CHANNEL)
+	}
+
+	void OnUserPostTagMessage(User* user, const MessageTarget& target, const CTCTags::TagMessageDetails& details) CXX11_OVERRIDE
+	{
+		if (!cap.get(user) || !details.echo)
+			return;
+
+		// Caps are only set on local users
+		LocalUser* const localuser = static_cast<LocalUser*>(user);
+
+		const ClientProtocol::TagMap& tags = details.echo_original ? details.tags_in : details.tags_out;
+		switch (target.type)
 		{
-			Channel* chan = target.Get<Channel>();
-			ClientProtocol::Messages::Privmsg privmsg(ClientProtocol::Messages::Privmsg::nocopy, user, chan, text, details.type, target.status);
-			privmsg.AddTags(tags);
-			localuser->Send(ServerInstance->GetRFCEvents().privmsg, privmsg);
-		}
-		else
-		{
-			const std::string* servername = target.Get<std::string>();
-			ClientProtocol::Messages::Privmsg privmsg(ClientProtocol::Messages::Privmsg::nocopy, user, *servername, text, details.type);
-			privmsg.AddTags(tags);
-			localuser->Send(ServerInstance->GetRFCEvents().privmsg, privmsg);
+			case MessageTarget::TYPE_USER:
+			{
+				User* destuser = target.Get<User>();
+				CTCTags::TagMessage message(user, destuser, tags);
+				localuser->Send(tagmsgprov, message);
+				break;
+			}
+			case MessageTarget::TYPE_CHANNEL:
+			{
+				Channel* chan = target.Get<Channel>();
+				CTCTags::TagMessage message(user, chan, tags);
+				localuser->Send(tagmsgprov, message);
+				break;
+			}
+			case MessageTarget::TYPE_SERVER:
+			{
+				const std::string* servername = target.Get<std::string>();
+				CTCTags::TagMessage message(user, servername->c_str(), tags);
+				localuser->Send(tagmsgprov, message);
+				break;
+			}
 		}
 	}
 
@@ -69,6 +117,13 @@ class ModuleIRCv3EchoMessage : public Module
 		// Prevent spammers from knowing that their spam was blocked.
 		if (details.echo_original)
 			OnUserPostMessage(user, target, details);
+	}
+
+	void OnUserTagMessageBlocked(User* user, const MessageTarget& target, const CTCTags::TagMessageDetails& details) CXX11_OVERRIDE
+	{
+		// Prevent spammers from knowing that their spam was blocked.
+		if (details.echo_original)
+			OnUserPostTagMessage(user, target, details);
 	}
 
 	Version GetVersion() CXX11_OVERRIDE

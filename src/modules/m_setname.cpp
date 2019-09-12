@@ -26,10 +26,11 @@
 class CommandSetname : public Command
 {
  public:
+	bool notifyopers;
 	CommandSetname(Module* Creator) : Command(Creator,"SETNAME", 1, 1)
 	{
 		allow_empty_last_param = false;
-		syntax = "<new real name>";
+		syntax = ":<realname>";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -42,7 +43,9 @@ class CommandSetname : public Command
 
 		if (user->ChangeRealName(parameters[0]))
 		{
-			ServerInstance->SNO->WriteGlobalSno('a', "%s used SETNAME to change their real name to '%s'", user->nick.c_str(), parameters[0].c_str());
+			if (notifyopers)
+				ServerInstance->SNO->WriteGlobalSno('a', "%s used SETNAME to change their real name to '%s'",
+					user->nick.c_str(), parameters[0].c_str());
 		}
 
 		return CMD_SUCCESS;
@@ -59,9 +62,21 @@ class ModuleSetName : public Module
 	{
 	}
 
+	void ReadConfig(ConfigStatus& status) CXX11_OVERRIDE
+	{
+		ConfigTag* tag = ServerInstance->Config->ConfValue("setname");
+
+		// Whether the module should only be usable by server operators.
+		bool operonly = tag->getBool("operonly");
+		cmd.flags_needed = operonly ? 'o' : 0;
+
+		// Whether a snotice should be sent out when a user changes their real name.
+		cmd.notifyopers = tag->getBool("notifyopers", !operonly);
+	}
+
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for the SETNAME command", VF_VENDOR);
+		return Version("Provides the SETNAME command", VF_VENDOR);
 	}
 };
 

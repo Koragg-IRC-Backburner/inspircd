@@ -26,22 +26,39 @@
 #include "inspircd.h"
 #include "event.h"
 #include "modules/dns.h"
+#include "modules/ssl.h"
 #include "modules/stats.h"
+#include "modules/ctctags.h"
+#include "modules/server.h"
 #include "servercommand.h"
 #include "commands.h"
 #include "protocolinterface.h"
 
-/** If you make a change which breaks the protocol, increment this.
- * If you  completely change the protocol, completely change the number.
+/** An enumeration of all known protocol versions.
  *
- * IMPORTANT: If you make changes, document your changes here, without fail:
- * https://wiki.inspircd.org/List_of_protocol_changes_between_versions
- *
- * Failure to document your protocol changes will result in a painfully
- * painful death by pain. You have been warned.
+ * If you introduce new protocol versions please document them here:
+ * https://docs.inspircd.org/spanningtree/changes
  */
-const unsigned int ProtocolVersion = 1205;
-const unsigned int MinCompatProtocol = 1202;
+enum ProtocolVersion
+{
+	/** The linking protocol version introduced in InspIRCd v2.0. */
+	PROTO_INSPIRCD_20 = 1202,
+
+	/** The linking protocol version introduced in InspIRCd v2.1 alpha 0. */
+	PROTO_INSPIRCD_21_A0 = 1203,
+
+	/** The linking protocol version introduced in InspIRCd v2.1 beta 2. */
+	PROTO_INSPIRCD_21_B2 = 1204,
+
+	/** The linking protocol version introduced in InspIRCd v3.0. */
+	PROTO_INSPIRCD_30 = 1205,
+
+	/** The oldest version of the protocol that we support. */
+	PROTO_OLDEST = PROTO_INSPIRCD_20,
+
+	/** The newest version of the protocol that we support. */
+	PROTO_NEWEST = PROTO_INSPIRCD_30
+};
 
 /** Forward declarations
  */
@@ -57,6 +74,7 @@ class ModuleSpanningTree
 	: public Module
 	, public Away::EventListener
 	, public Stats::EventListener
+	, public CTCTags::EventListener
 {
 	/** Client to server commands, registered in the core
 	 */
@@ -76,9 +94,20 @@ class ModuleSpanningTree
 	 */
 	SpanningTreeProtocolInterface protocolinterface;
 
-	/** Event provider for our events
-	 */
-	Events::ModuleEventProvider eventprov;
+	/** Event provider for our broadcast events. */
+	Events::ModuleEventProvider broadcasteventprov;
+
+	/** Event provider for our link events. */
+	Events::ModuleEventProvider linkeventprov;
+
+	/** Event provider for our message events. */
+	Events::ModuleEventProvider messageeventprov;
+
+	/** Event provider for our sync events. */
+	Events::ModuleEventProvider synceventprov;
+
+	/** API for accessing user SSL certificates. */
+	UserCertificateAPI sslapi;
 
  public:
 	dynamic_reference<DNS::Manager> DNS;
@@ -138,11 +167,17 @@ class ModuleSpanningTree
 	 */
 	ModResult HandleConnect(const CommandBase::Params& parameters, User* user);
 
-	/** Display a time as a human readable string
-	 */
-	static std::string TimeToStr(time_t secs);
+	/** Retrieves the event provider for broadcast events. */
+	const Events::ModuleEventProvider& GetBroadcastEventProvider() const { return broadcasteventprov; }
 
-	const Events::ModuleEventProvider& GetEventProvider() const { return eventprov; }
+	/** Retrieves the event provider for link events. */
+	const Events::ModuleEventProvider& GetLinkEventProvider() const { return linkeventprov; }
+
+	/** Retrieves the event provider for message events. */
+	const Events::ModuleEventProvider& GetMessageEventProvider() const { return messageeventprov; }
+
+	/** Retrieves the event provider for sync events. */
+	const Events::ModuleEventProvider& GetSyncEventProvider() const { return synceventprov; }
 
 	/**
 	 ** *** MODULE EVENTS ***
@@ -155,6 +190,7 @@ class ModuleSpanningTree
 	ModResult OnPreTopicChange(User* user, Channel* chan, const std::string& topic) CXX11_OVERRIDE;
 	void OnPostTopicChange(User* user, Channel* chan, const std::string &topic) CXX11_OVERRIDE;
 	void OnUserPostMessage(User* user, const MessageTarget& target, const MessageDetails& details) CXX11_OVERRIDE;
+	void OnUserPostTagMessage(User* user, const MessageTarget& target, const CTCTags::TagMessageDetails& details) CXX11_OVERRIDE;
 	void OnBackgroundTimer(time_t curtime) CXX11_OVERRIDE;
 	void OnUserJoin(Membership* memb, bool sync, bool created, CUList& excepts) CXX11_OVERRIDE;
 	void OnChangeHost(User* user, const std::string &newhost) CXX11_OVERRIDE;

@@ -30,7 +30,7 @@ class CommandSetident : public Command
  CommandSetident(Module* Creator) : Command(Creator,"SETIDENT", 1)
 	{
 		allow_empty_last_param = false;
-		flags_needed = 'o'; syntax = "<new-ident>";
+		flags_needed = 'o'; syntax = "<ident>";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -65,7 +65,7 @@ class ModuleSetIdent : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for the SETIDENT command", VF_VENDOR);
+		return Version("Provides the SETIDENT command", VF_VENDOR);
 	}
 };
 

@@ -30,7 +30,6 @@
 #include <signal.h>
 
 #ifndef _WIN32
-	#include <dirent.h>
 	#include <unistd.h>
 	#include <sys/resource.h>
 	#include <dlfcn.h>
@@ -47,7 +46,6 @@
 #include <iostream>
 #include "xline.h"
 #include "exitcodes.h"
-#include "testsuite.h"
 
 InspIRCd* ServerInstance = NULL;
 
@@ -78,13 +76,6 @@ const char* ExitCodes[] =
 		"Received SIGTERM"						// 10
 };
 
-#ifdef INSPIRCD_ENABLE_TESTSUITE
-/** True if we have been told to run the testsuite from the commandline,
- * rather than entering the mainloop.
- */
-static int do_testsuite = 0;
-#endif
-
 template<typename T> static void DeleteZero(T*&n)
 {
 	T* t = n;
@@ -101,6 +92,12 @@ void InspIRCd::Cleanup()
 		delete ports[i];
 	}
 	ports.clear();
+
+	// Disconnect all local users
+	const std::string quitmsg = "Server shutting down";
+	const UserManager::LocalList& list = Users.GetLocalUsers();
+	while (!list.empty())
+		ServerInstance->Users.QuitUser(list.front(), quitmsg);
 
 	GlobalCulls.Apply();
 	Modules->UnloadAll();
@@ -123,10 +120,11 @@ void InspIRCd::SetSignals()
 {
 #ifndef _WIN32
 	signal(SIGALRM, SIG_IGN);
+	signal(SIGCHLD, SIG_IGN);
 	signal(SIGHUP, InspIRCd::SetSignal);
 	signal(SIGPIPE, SIG_IGN);
-	signal(SIGCHLD, SIG_IGN);
-	/* We want E2BIG not a signal! */
+	signal(SIGUSR1, SIG_IGN);
+	signal(SIGUSR2, SIG_IGN);
 	signal(SIGXFSZ, SIG_IGN);
 #endif
 	signal(SIGTERM, InspIRCd::SetSignal);
@@ -192,9 +190,7 @@ void InspIRCd::WritePID(const std::string& filename, bool exitonfail)
 		return;
 	}
 
-	std::string fname(filename);
-	if (fname.empty())
-		fname = ServerInstance->Config->Paths.PrependData("inspircd.pid");
+	std::string fname = ServerInstance->Config->Paths.PrependData(filename.empty() ? "inspircd.pid" : filename);
 	std::ofstream outfile(fname.c_str());
 	if (outfile.is_open())
 	{
@@ -290,9 +286,6 @@ InspIRCd::InspIRCd(int argc, char** argv) :
 		{ "nopid",	no_argument,		&do_nopid,	1	},
 		{ "runasroot",	no_argument,		&do_root,	1	},
 		{ "version",	no_argument,		&do_version,	1	},
-#ifdef INSPIRCD_ENABLE_TESTSUITE
-		{ "testsuite",	no_argument,		&do_testsuite,	1	},
-#endif
 		{ 0, 0, 0, 0 }
 	};
 
@@ -329,11 +322,6 @@ InspIRCd::InspIRCd(int argc, char** argv) :
 			break;
 		}
 	}
-
-#ifdef INSPIRCD_ENABLE_TESTSUITE
-	if (do_testsuite)
-		do_nofork = do_debug = true;
-#endif
 
 	if (do_version)
 	{
@@ -585,16 +573,6 @@ void InspIRCd::UpdateTime()
 
 void InspIRCd::Run()
 {
-#ifdef INSPIRCD_ENABLE_TESTSUITE
-	/* See if we're supposed to be running the test suite rather than entering the mainloop */
-	if (do_testsuite)
-	{
-		TestSuite* ts = new TestSuite;
-		delete ts;
-		return;
-	}
-#endif
-
 	UpdateTime();
 	time_t OLDTIME = TIME.tv_sec;
 

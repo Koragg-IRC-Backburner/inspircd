@@ -28,11 +28,14 @@ class ModuleIRCv3ChgHost : public Module
 
 	void DoChgHost(User* user, const std::string& ident, const std::string& host)
 	{
+		if (!(user->registered & REG_NICKUSER))
+			return;
+
 		ClientProtocol::Message msg("CHGHOST", user);
 		msg.PushParamRef(ident);
 		msg.PushParamRef(host);
 		ClientProtocol::Event protoev(protoevprov, msg);
-		IRCv3::WriteNeighborsWithCap(user, protoev, cap);
+		IRCv3::WriteNeighborsWithCap(user, protoev, cap, true);
 	}
 
  public:

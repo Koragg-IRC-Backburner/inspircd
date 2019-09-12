@@ -26,6 +26,7 @@ ModeUserServerNoticeMask::ModeUserServerNoticeMask(Module* Creator)
 	: ModeHandler(Creator, "snomask", 's', PARAM_SETONLY, MODETYPE_USER)
 {
 	oper = true;
+	syntax = "(+|-)<snomasks>";
 }
 
 ModeAction ModeUserServerNoticeMask::OnModeChange(User* source, User* dest, Channel*, std::string &parameter, bool adding)
@@ -100,7 +101,7 @@ std::string ModeUserServerNoticeMask::ProcessNoticeMasks(User* user, const std::
 				{
 					if (!ServerInstance->SNO->IsSnomaskUsable(*i))
 					{
-						user->WriteNumeric(ERR_UNKNOWNSNOMASK, *i, "is unknown snomask char to me");
+						user->WriteNumeric(ERR_UNKNOWNSNOMASK, *i, "is an unknown snomask character");
 						continue;
 					}
 				}

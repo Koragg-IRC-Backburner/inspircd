@@ -48,6 +48,65 @@ namespace
 			user->ForEachNeighbor(*this, false);
 		}
 	};
+
+	void CheckPingTimeout(LocalUser* user)
+	{
+		// Check if it is time to ping the user yet.
+		if (ServerInstance->Time() < user->nextping)
+			return;
+
+		// This user didn't answer the last ping, remove them.
+		if (!user->lastping)
+		{
+			ModResult res;
+			FIRST_MOD_RESULT(OnConnectionFail, res, (user, I_ERR_TIMEOUT));
+			if (res == MOD_RES_ALLOW)
+			{
+				// A module is preventing this user from being timed out.
+				user->lastping = 1;
+				user->nextping = ServerInstance->Time() + user->MyClass->GetPingTime();
+				return;
+			}
+
+			time_t secs = ServerInstance->Time() - (user->nextping - user->MyClass->GetPingTime());
+			const std::string message = "Ping timeout: " + ConvToStr(secs) + (secs != 1 ? " seconds" : " second");
+			ServerInstance->Users.QuitUser(user, message);
+			return;
+		}
+
+		// Send a ping to the client.
+		ClientProtocol::Messages::Ping ping;
+		user->Send(ServerInstance->GetRFCEvents().ping, ping);
+		user->lastping = 0;
+		user->nextping = ServerInstance->Time() + user->MyClass->GetPingTime();
+	}
+
+	void CheckRegistrationTimeout(LocalUser* user)
+	{
+		if (user->GetClass() && (ServerInstance->Time() > (user->signon + user->GetClass()->GetRegTimeout())))
+		{
+			// Either the user did not send NICK/USER or a module blocked registration in
+			// OnCheckReady until the client timed out.
+			ServerInstance->Users.QuitUser(user, "Registration timeout");
+		}
+	}
+
+	void CheckModulesReady(LocalUser* user)
+	{
+		ModResult res;
+		FIRST_MOD_RESULT(OnCheckReady, res, (user));
+		if (res == MOD_RES_PASSTHRU)
+		{
+			// User has sent NICK/USER and modules are ready.
+			user->FullConnect();
+			return;
+		}
+
+		// If the user has been quit in OnCheckReady then we shouldn't quit
+		// them again for having a registration timeout.
+		if (!user->quitting)
+			CheckRegistrationTimeout(user);
+	}
 }
 
 UserManager::UserManager()
@@ -161,11 +220,11 @@ void UserManager::AddUser(int socket, ListenSocket* via, irc::sockets::sockaddrs
 		New->WriteNotice("*** Raw I/O logging is enabled on this server. All messages, passwords, and commands are being recorded.");
 
 	FOREACH_MOD(OnSetUserIP, (New));
-	if (New->quitting)
-		return;
+	if (!New->quitting)
+		FOREACH_MOD(OnUserPostInit, (New));
 }
 
-void UserManager::QuitUser(User* user, const std::string& quitreason, const std::string* operreason)
+void UserManager::QuitUser(User* user, const std::string& quitmessage, const std::string* operquitmessage)
 {
 	if (user->quitting)
 	{
@@ -179,27 +238,42 @@ void UserManager::QuitUser(User* user, const std::string& quitreason, const std:
 		return;
 	}
 
-	user->quitting = true;
+	std::string quitmsg(quitmessage);
+	std::string operquitmsg;
+	if (operquitmessage)
+		operquitmsg.assign(*operquitmessage);
 
-	ServerInstance->Logs->Log("USERS", LOG_DEBUG, "QuitUser: %s=%s '%s'", user->uuid.c_str(), user->nick.c_str(), quitreason.c_str());
 	LocalUser* const localuser = IS_LOCAL(user);
 	if (localuser)
 	{
-		ClientProtocol::Messages::Error errormsg(InspIRCd::Format("Closing link: (%s@%s) [%s]", user->ident.c_str(), user->GetRealHost().c_str(), operreason ? operreason->c_str() : quitreason.c_str()));
-		localuser->Send(ServerInstance->GetRFCEvents().error, errormsg);
+		ModResult MOD_RESULT;
+		FIRST_MOD_RESULT(OnUserPreQuit, MOD_RESULT, (localuser, quitmsg, operquitmsg));
+		if (MOD_RESULT == MOD_RES_DENY)
+			return;
 	}
 
-	std::string reason;
-	reason.assign(quitreason, 0, ServerInstance->Config->Limits.MaxQuit);
-	if (!operreason)
-		operreason = &reason;
+	if (quitmsg.length() > ServerInstance->Config->Limits.MaxQuit)
+		quitmsg.erase(ServerInstance->Config->Limits.MaxQuit + 1);
+
+	if (operquitmsg.empty())
+		operquitmsg.assign(quitmsg);
+	else if (operquitmsg.length() > ServerInstance->Config->Limits.MaxQuit)
+		operquitmsg.erase(ServerInstance->Config->Limits.MaxQuit + 1);
+
+	user->quitting = true;
+	ServerInstance->Logs->Log("USERS", LOG_DEBUG, "QuitUser: %s=%s '%s'", user->uuid.c_str(), user->nick.c_str(), quitmessage.c_str());
+	if (localuser)
+	{
+		ClientProtocol::Messages::Error errormsg(InspIRCd::Format("Closing link: (%s@%s) [%s]", user->ident.c_str(), user->GetRealHost().c_str(), operquitmsg.c_str()));
+		localuser->Send(ServerInstance->GetRFCEvents().error, errormsg);
+	}
 
 	ServerInstance->GlobalCulls.AddItem(user);
 
 	if (user->registered == REG_ALL)
 	{
-		FOREACH_MOD(OnUserQuit, (user, reason, *operreason));
-		WriteCommonQuit(user, reason, *operreason);
+		FOREACH_MOD(OnUserQuit, (user, quitmsg, operquitmsg));
+		WriteCommonQuit(user, quitmsg, operquitmsg);
 	}
 	else
 		unregistered_count--;
@@ -211,7 +285,7 @@ void UserManager::QuitUser(User* user, const std::string& quitreason, const std:
 		lu->eh.Close();
 
 		if (lu->registered == REG_ALL)
-			ServerInstance->SNO->WriteToSnoMask('q',"Client exiting: %s (%s) [%s]", user->GetFullRealHost().c_str(), user->GetIPString().c_str(), operreason->c_str());
+			ServerInstance->SNO->WriteToSnoMask('q',"Client exiting: %s (%s) [%s]", user->GetFullRealHost().c_str(), user->GetIPString().c_str(), operquitmsg.c_str());
 		local_users.erase(lu);
 	}
 
@@ -285,17 +359,6 @@ void UserManager::ServerNoticeAll(const char* text, ...)
 	}
 }
 
-/* this returns true when all modules are satisfied that the user should be allowed onto the irc server
- * (until this returns true, a user will block in the waiting state, waiting to connect up to the
- * registration timeout maximum seconds)
- */
-bool UserManager::AllModulesReportReady(LocalUser* user)
-{
-	ModResult res;
-	FIRST_MOD_RESULT(OnCheckReady, res, (user));
-	return (res == MOD_RES_PASSTHRU);
-}
-
 /**
  * This function is called once a second from the mainloop.
  * It is intended to do background checking on all the users, e.g. do
@@ -322,45 +385,16 @@ void UserManager::DoBackgroundUserStuff()
 		switch (curr->registered)
 		{
 			case REG_ALL:
-				if (ServerInstance->Time() >= curr->nping)
-				{
-					// This user didn't answer the last ping, remove them
-					if (!curr->lastping)
-					{
-						time_t time = ServerInstance->Time() - (curr->nping - curr->MyClass->GetPingTime());
-						const std::string message = "Ping timeout: " + ConvToStr(time) + (time != 1 ? " seconds" : " second");
-						this->QuitUser(curr, message);
-						continue;
-					}
-					ClientProtocol::Messages::Ping ping;
-					curr->Send(ServerInstance->GetRFCEvents().ping, ping);
-					curr->lastping = 0;
-					curr->nping = ServerInstance->Time() + curr->MyClass->GetPingTime();
-				}
+				CheckPingTimeout(curr);
 				break;
+
 			case REG_NICKUSER:
-				if (AllModulesReportReady(curr))
-				{
-					/* User has sent NICK/USER, modules are okay, DNS finished. */
-					curr->FullConnect();
-					continue;
-				}
-
-				// If the user has been quit in OnCheckReady then we shouldn't
-				// quit them again for having a registration timeout.
-				if (curr->quitting)
-					continue;
+				CheckModulesReady(curr);
 				break;
-		}
 
-		if (curr->registered != REG_ALL && curr->MyClass && (ServerInstance->Time() > (curr->signon + curr->MyClass->GetRegTimeout())))
-		{
-			/*
-			 * registration timeout -- didnt send USER/NICK/HOST
-			 * in the time specified in their connection class.
-			 */
-			this->QuitUser(curr, "Registration timeout");
-			continue;
+			default:
+				CheckRegistrationTimeout(curr);
+				break;
 		}
 	}
 }

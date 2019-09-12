@@ -242,7 +242,7 @@ Channel* Channel::JoinUser(LocalUser* user, std::string cname, bool override, co
 			{
 				if (chan->IsBanned(user))
 				{
-					user->WriteNumeric(ERR_BANNEDFROMCHAN, chan->name, "Cannot join channel (You're banned)");
+					user->WriteNumeric(ERR_BANNEDFROMCHAN, chan->name, "Cannot join channel (you're banned)");
 					return NULL;
 				}
 			}
@@ -271,8 +271,8 @@ Membership* Channel::ForceJoin(User* user, const std::string* privs, bool bursti
 
 	if (privs)
 	{
-		// If the user was granted prefix modes (in the OnUserPreJoin hook, or he's a
-		// remote user and his own server set the modes), then set them internally now
+		// If the user was granted prefix modes (in the OnUserPreJoin hook, or they're a
+		// remote user and their own server set the modes), then set them internally now
 		for (std::string::const_iterator i = privs->begin(); i != privs->end(); ++i)
 		{
 			PrefixMode* mh = ServerInstance->Modes->FindPrefixMode(*i);
@@ -436,7 +436,7 @@ void Channel::Write(ClientProtocol::Event& protoev, char status, const CUList& e
 	}
 }
 
-const char* Channel::ChanModes(bool showkey)
+const char* Channel::ChanModes(bool showsecret)
 {
 	static std::string scratch;
 	std::string sparam;
@@ -455,9 +455,9 @@ const char* Channel::ChanModes(bool showkey)
 			if (!pm)
 				continue;
 
-			if (n == 'k' - 65 && !showkey)
+			if (pm->IsParameterSecret() && !showsecret)
 			{
-				sparam += " <key>";
+				sparam += " <" + pm->name + ">";
 			}
 			else
 			{

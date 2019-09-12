@@ -88,7 +88,7 @@ class CommandWhois : public SplitCommand
 	void SendChanList(WhoisContextImpl& whois);
 
  public:
-	 /** If true then all opers are shown with a generic 'is an IRC operator' line rather than the oper type. */
+	 /** If true then all opers are shown with a generic 'is a server operator' line rather than the oper type. */
 	bool genericoper;
 
 	 /** How to handle private/secret channels in the WHOIS response. */
@@ -107,7 +107,7 @@ class CommandWhois : public SplitCommand
 		, lineevprov(parent, "event/whoisline")
 	{
 		Penalty = 2;
-		syntax = "<nick>{,<nick>}";
+		syntax = "[<servername>] <nick>[,<nick>]+";
 	}
 
 	/** Handle command.
@@ -242,7 +242,7 @@ void CommandWhois::DoWhois(LocalUser* user, User* dest, time_t signon, unsigned 
 	if (dest->IsOper())
 	{
 		if (genericoper)
-			whois.SendLine(RPL_WHOISOPERATOR, "is an IRC operator");
+			whois.SendLine(RPL_WHOISOPERATOR, "is a server operator");
 		else
 			whois.SendLine(RPL_WHOISOPERATOR, InspIRCd::Format("is %s %s on %s", (strchr("AEIOUaeiou",dest->oper->name[0]) ? "an" : "a"), dest->oper->name.c_str(), ServerInstance->Config->Network.c_str()));
 	}
@@ -365,7 +365,7 @@ class CoreModWhois : public Module
 		else if (stdalgo::string::equalsci(splitwhois, "splitmsg"))
 			newsplitstate = SPLITWHOIS_SPLITMSG;
 		else
-			throw ModuleException(splitwhois + " is an invalid <security:splitwhois> value, at " + tag->getTagLocation());
+			throw ModuleException(splitwhois + " is an invalid <options:splitwhois> value, at " + tag->getTagLocation());
 
 		ConfigTag* security = ServerInstance->Config->ConfValue("security");
 		cmd.genericoper = security->getBool("genericoper");

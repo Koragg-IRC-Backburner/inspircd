@@ -58,8 +58,8 @@ public:
 	{
 		if (!silent)
 		{
-			ServerInstance->SNO->WriteToSnoMask('x', "Removing expired SVSHOLD %s (set by %s %ld seconds ago): %s",
-				nickname.c_str(), source.c_str(), (long)(ServerInstance->Time() - set_time), reason.c_str());
+			ServerInstance->SNO->WriteToSnoMask('x', "Removing expired SVSHOLD %s (set by %s %s ago): %s",
+				nickname.c_str(), source.c_str(), InspIRCd::DurationString(ServerInstance->Time() - set_time).c_str(), reason.c_str());
 		}
 	}
 
@@ -96,7 +96,7 @@ class CommandSvshold : public Command
  public:
 	CommandSvshold(Module* Creator) : Command(Creator, "SVSHOLD", 1)
 	{
-		flags_needed = 'o'; this->syntax = "<nickname> [<duration> :<reason>]";
+		flags_needed = 'o'; this->syntax = "<nick> [<duration> :<reason>]";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -121,7 +121,7 @@ class CommandSvshold : public Command
 			}
 			else
 			{
-				user->WriteNotice("*** SVSHOLD " + parameters[0] + " not found in list, try /stats S.");
+				user->WriteNotice("*** SVSHOLD " + parameters[0] + " not found on the list.");
 			}
 		}
 		else
@@ -148,9 +148,9 @@ class CommandSvshold : public Command
 				}
 				else
 				{
-					time_t c_requires_crap = duration + ServerInstance->Time();
-					std::string timestr = InspIRCd::TimeString(c_requires_crap);
-					ServerInstance->SNO->WriteGlobalSno('x', "%s added timed SVSHOLD for %s, expires on %s: %s", user->nick.c_str(), parameters[0].c_str(), timestr.c_str(), parameters[2].c_str());
+					ServerInstance->SNO->WriteGlobalSno('x', "%s added timed SVSHOLD for %s, expires in %s (on %s): %s",
+						user->nick.c_str(), parameters[0].c_str(), InspIRCd::DurationString(duration).c_str(),
+						InspIRCd::TimeString(ServerInstance->Time() + duration).c_str(), parameters[2].c_str());
 				}
 			}
 			else
@@ -223,7 +223,7 @@ class ModuleSVSHold : public Module, public Stats::EventListener
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Implements SVSHOLD. Like Q-lines, but can only be added/removed by Services.", VF_COMMON | VF_VENDOR);
+		return Version("Implements SVSHOLD, like Q-lines, but can only be added/removed by Services", VF_COMMON | VF_VENDOR);
 	}
 };
 

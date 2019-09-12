@@ -22,10 +22,12 @@
 
 #include "inspircd.h"
 #include "modules/cap.h"
+#include "modules/names.h"
 #include "modules/who.h"
 
 class ModuleNamesX
 	: public Module
+	, public Names::EventListener
 	, public Who::EventListener
 {
  private:
@@ -33,19 +35,23 @@ class ModuleNamesX
 
  public:
 	ModuleNamesX()
-		: Who::EventListener(this)
+		: Names::EventListener(this)
+		, Who::EventListener(this)
 		, cap(this, "multi-prefix")
 	{
 	}
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides the NAMESX (CAP multi-prefix) capability.",VF_VENDOR);
+		return Version("Provides the NAMESX (CAP multi-prefix) capability", VF_VENDOR);
 	}
 
 	void On005Numeric(std::map<std::string, std::string>& tokens) CXX11_OVERRIDE
 	{
-		tokens["NAMESX"];
+		// The legacy PROTOCTL system is a wrapper around the cap.
+		dynamic_reference_nocheck<Cap::Manager> capmanager(this, "capmanager");
+		if (capmanager)
+			tokens["NAMESX"];
 	}
 
 	ModResult OnPreCommand(std::string& command, CommandBase::Params& parameters, LocalUser* user, bool validated) CXX11_OVERRIDE
@@ -66,7 +72,7 @@ class ModuleNamesX
 		return MOD_RES_PASSTHRU;
 	}
 
-	ModResult OnNamesListItem(User* issuer, Membership* memb, std::string& prefixes, std::string& nick) CXX11_OVERRIDE
+	ModResult OnNamesListItem(LocalUser* issuer, Membership* memb, std::string& prefixes, std::string& nick) CXX11_OVERRIDE
 	{
 		if (cap.get(issuer))
 			prefixes = memb->GetAllPrefixChars();
@@ -84,22 +90,9 @@ class ModuleNamesX
 		if (prefixes.length() <= 1)
 			return MOD_RES_PASSTHRU;
 
-		size_t flag_index = 5;
-		if (request.whox)
-		{
-			// We only need to fiddle with the flags if they are present.
-			if (!request.whox_fields['f'])
-				return MOD_RES_PASSTHRU;
-
-			// WHOX makes this a bit tricky as we need to work out the parameter which the flags are in.
-			flag_index = 0;
-			static const char* flags = "tcuihsn";
-			for (size_t i = 0; i < strlen(flags); ++i)
-			{
-				if (request.whox_fields[flags[i]])
-					flag_index += 1;
-			}
-		}
+		size_t flag_index;
+		if (!request.GetFieldIndex('f', flag_index))
+			return MOD_RES_PASSTHRU;
 
 		// #chan ident localhost insp22.test nick H@ :0 Attila
 		if (numeric.GetParams().size() <= flag_index)

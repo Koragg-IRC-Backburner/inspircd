@@ -28,7 +28,7 @@ class CommandSaquit : public Command
  public:
 	CommandSaquit(Module* Creator) : Command(Creator, "SAQUIT", 2, 2)
 	{
-		flags_needed = 'o'; syntax = "<nick> <reason>";
+		flags_needed = 'o'; syntax = "<nick> :<reason>";
 		TRANSLATE2(TR_NICK, TR_TEXT);
 	}
 
@@ -39,7 +39,7 @@ class CommandSaquit : public Command
 		{
 			if (dest->server->IsULine())
 			{
-				user->WriteNumeric(ERR_NOPRIVILEGES, "Cannot use an SA command on a u-lined client");
+				user->WriteNumeric(ERR_NOPRIVILEGES, "Cannot use an SA command on a U-lined client");
 				return CMD_FAILURE;
 			}
 
@@ -54,7 +54,7 @@ class CommandSaquit : public Command
 		}
 		else
 		{
-			user->WriteNotice("*** Invalid nickname '" + parameters[0] + "'");
+			user->WriteNotice("*** Invalid nickname: '" + parameters[0] + "'");
 			return CMD_FAILURE;
 		}
 	}
@@ -76,7 +76,7 @@ class ModuleSaquit : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for an SAQUIT command, exits user with a reason", VF_OPTCOMMON | VF_VENDOR);
+		return Version("Provides the SAQUIT command, allows opers to force-quit users", VF_OPTCOMMON | VF_VENDOR);
 	}
 };
 

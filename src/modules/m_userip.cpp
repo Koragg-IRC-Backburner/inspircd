@@ -28,7 +28,7 @@ class CommandUserip : public Command
  public:
 	CommandUserip(Module* Creator) : Command(Creator,"USERIP", 1)
 	{
-		syntax = "<nick> [<nick> ...]";
+		syntax = "<nick> [<nick>]+";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -92,7 +92,7 @@ class ModuleUserIP : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for USERIP command",VF_VENDOR);
+		return Version("Provides the USERIP command", VF_VENDOR);
 	}
 };
 

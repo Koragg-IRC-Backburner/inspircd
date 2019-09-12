@@ -24,7 +24,7 @@ class CommandModeNotice : public Command
  public:
 	CommandModeNotice(Module* parent) : Command(parent,"MODENOTICE",2,2)
 	{
-		syntax = "<modes> <message>";
+		syntax = "<modeletters> :<message>";
 		flags_needed = 'o';
 	}
 
@@ -65,7 +65,7 @@ class ModuleModeNotice : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides the /MODENOTICE command", VF_VENDOR);
+		return Version("Provides the MODENOTICE command", VF_VENDOR);
 	}
 };
 

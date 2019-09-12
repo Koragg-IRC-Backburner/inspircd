@@ -20,37 +20,58 @@
 #include "inspircd.h"
 #include "modules/ircv3.h"
 #include "modules/ircv3_servertime.h"
+#include "modules/server.h"
 
-class ServerTimeTag : public IRCv3::ServerTime::Manager, public IRCv3::CapTag<ServerTimeTag>
+class ServerTimeTag
+	: public IRCv3::ServerTime::Manager
+	, public IRCv3::CapTag<ServerTimeTag>
+	, public ServerProtocol::MessageEventListener
 {
 	time_t lasttime;
+	long lasttimens;
 	std::string lasttimestring;
 
 	void RefreshTimeString()
 	{
 		const time_t currtime = ServerInstance->Time();
-		if (currtime != lasttime)
+		const long currtimens = ServerInstance->Time_ns();
+		if (currtime != lasttime || currtimens != lasttimens)
 		{
 			lasttime = currtime;
-			// Cache the string so it's not recreated every time a message is sent
-			lasttimestring = IRCv3::ServerTime::FormatTime(currtime);
+			lasttimens = currtimens;
+
+			// Cache the string so it's not recreated every time a message is sent.
+			lasttimestring = IRCv3::ServerTime::FormatTime(currtime, (currtimens ? currtimens / 1000000 : 0));
 		}
 	}
 
  public:
+	using ServerProtocol::MessageEventListener::OnBuildMessage;
+
 	ServerTimeTag(Module* mod)
 		: IRCv3::ServerTime::Manager(mod)
 		, IRCv3::CapTag<ServerTimeTag>(mod, "server-time", "time")
+		, ServerProtocol::MessageEventListener(mod)
 		, lasttime(0)
+		, lasttimens(0)
 	{
 		tagprov = this;
 	}
 
 	const std::string* GetValue(const ClientProtocol::Message& msg)
 	{
+		// Client protocol.
 		RefreshTimeString();
 		return &lasttimestring;
 	}
+
+	void OnBuildMessage(User* source, const char* command, ClientProtocol::TagMap& tags) CXX11_OVERRIDE
+	{
+		// Server protocol.
+		RefreshTimeString();
+		tags.insert(std::make_pair(tagname, ClientProtocol::MessageTagData(this, lasttimestring)));
+	}
+
 };
 
 class ModuleIRCv3ServerTime : public Module

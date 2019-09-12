@@ -40,11 +40,11 @@ class IRCv3::WriteNeighborsWithCap : public User::ForEachNeighborHandler
 	}
 
  public:
-	WriteNeighborsWithCap(User* user, ClientProtocol::Event& ev, const Cap::Capability& capability)
+	WriteNeighborsWithCap(User* user, ClientProtocol::Event& ev, const Cap::Capability& capability, bool include_self = false)
 		: cap(capability)
 		, protoev(ev)
 	{
-		user->ForEachNeighbor(*this, false);
+		user->ForEachNeighbor(*this, include_self);
 	}
 };
 
@@ -67,6 +67,7 @@ class IRCv3::WriteNeighborsWithCap : public User::ForEachNeighborHandler
 template <typename T>
 class IRCv3::CapTag : public ClientProtocol::MessageTagProvider
 {
+ protected:
 	Cap::Capability cap;
 	const std::string tagname;
 
@@ -75,7 +76,7 @@ class IRCv3::CapTag : public ClientProtocol::MessageTagProvider
 		return cap.get(user);
 	}
 
-	void OnClientProtocolPopulateTags(ClientProtocol::Message& msg) CXX11_OVERRIDE
+	void OnPopulateTags(ClientProtocol::Message& msg) CXX11_OVERRIDE
 	{
 		T& tag = static_cast<T&>(*this);
 		const std::string* const val = tag.GetValue(msg);

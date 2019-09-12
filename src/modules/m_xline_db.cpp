@@ -22,11 +22,20 @@
 #include "xline.h"
 #include <fstream>
 
-class ModuleXLineDB : public Module
+class ModuleXLineDB
+	: public Module
+	, public Timer
 {
+ private:
 	bool dirty;
 	std::string xlinedbpath;
+
  public:
+	ModuleXLineDB()
+		: Timer(0, true)
+	{
+	}
+
 	void init() CXX11_OVERRIDE
 	{
 		/* Load the configuration
@@ -37,6 +46,7 @@ class ModuleXLineDB : public Module
 		 */
 		ConfigTag* Conf = ServerInstance->Config->ConfValue("xlinedb");
 		xlinedbpath = ServerInstance->Config->Paths.PrependData(Conf->getString("filename", "xline.db"));
+		SetInterval(Conf->getDuration("saveperiod", 5));
 
 		// Read xlines before attaching to events
 		ReadDatabase();
@@ -51,7 +61,8 @@ class ModuleXLineDB : public Module
 	 */
 	void OnAddLine(User* source, XLine* line) CXX11_OVERRIDE
 	{
-		dirty = true;
+		if (!line->from_config)
+			dirty = true;
 	}
 
 	/** Called whenever an xline is deleted.
@@ -61,16 +72,18 @@ class ModuleXLineDB : public Module
 	 */
 	void OnDelLine(User* source, XLine* line) CXX11_OVERRIDE
 	{
-		dirty = true;
+		if (!line->from_config)
+			dirty = true;
 	}
 
-	void OnBackgroundTimer(time_t now) CXX11_OVERRIDE
+	bool Tick(time_t) CXX11_OVERRIDE
 	{
 		if (dirty)
 		{
 			if (WriteDatabase())
 				dirty = false;
 		}
+		return true;
 	}
 
 	bool WriteDatabase()
@@ -113,6 +126,9 @@ class ModuleXLineDB : public Module
 			for (LookupIter i = lookup->begin(); i != lookup->end(); ++i)
 			{
 				XLine* line = i->second;
+				if (line->from_config)
+					continue;
+
 				stream << "LINE " << line->type << " " << line->Displayable() << " "
 					<< line->source << " " << line->set_time << " "
 					<< line->duration << " :" << line->reason << std::endl;
@@ -195,8 +211,8 @@ class ModuleXLineDB : public Module
 					continue;
 				}
 
-				XLine* xl = xlf->Generate(ServerInstance->Time(), atoi(command_p[5].c_str()), command_p[3], command_p[6], command_p[2]);
-				xl->SetCreateTime(atoi(command_p[4].c_str()));
+				XLine* xl = xlf->Generate(ServerInstance->Time(), ConvToNum<unsigned long>(command_p[5]), command_p[3], command_p[6], command_p[2]);
+				xl->SetCreateTime(ConvToNum<time_t>(command_p[4]));
 
 				if (ServerInstance->XLines->AddLine(xl, NULL))
 				{
@@ -212,7 +228,7 @@ class ModuleXLineDB : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Keeps a dynamic log of all XLines created, and stores them in a separate conf file (xline.db).", VF_VENDOR);
+		return Version("Provides the ability to store X-lines in a database file", VF_VENDOR);
 	}
 };
 

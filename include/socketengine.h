@@ -164,6 +164,12 @@ class CoreExport EventHandler : public classbase
 	 * registered with the SocketEngine
 	 */
 	int fd;
+
+	/** Swaps the internals of this EventHandler with another one.
+	 * @param other A EventHandler to swap internals with.
+	 */
+	void SwapInternals(EventHandler& other);
+
  public:
 	/** Get the current file descriptor
 	 * @return The file descriptor of this handler
@@ -298,7 +304,7 @@ class CoreExport SocketEngine
 	static void ResizeDouble(std::vector<T>& vect)
 	{
 		if (SocketEngine::CurrentSetSize > vect.size())
-			vect.resize(vect.size() * 2);
+			vect.resize(SocketEngine::CurrentSetSize * 2);
 	}
 
 public:

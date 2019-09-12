@@ -97,6 +97,7 @@ class JoinFlood : public ParamMode<JoinFlood, SimpleExtItem<joinfloodsettings> >
 	JoinFlood(Module* Creator)
 		: ParamMode<JoinFlood, SimpleExtItem<joinfloodsettings> >(Creator, "joinflood", 'j')
 	{
+		syntax = "<joins>:<seconds>";
 	}
 
 	ModeAction OnSet(User* source, Channel* channel, std::string& parameter) CXX11_OVERRIDE
@@ -151,7 +152,7 @@ class ModuleJoinFlood : public Module
 			joinfloodsettings *f = jf.ext.get(chan);
 			if (f && f->islocked())
 			{
-				user->WriteNumeric(ERR_UNAVAILRESOURCE, chan->name, "This channel is temporarily unavailable (+j). Please try again later.");
+				user->WriteNumeric(ERR_UNAVAILRESOURCE, chan->name, "This channel is temporarily unavailable (+j is set). Please try again later.");
 				return MOD_RES_DENY;
 			}
 		}
@@ -181,7 +182,7 @@ class ModuleJoinFlood : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides channel mode +j (join flood protection)", VF_VENDOR);
+		return Version("Provides channel mode +j, join flood protection", VF_VENDOR);
 	}
 };
 

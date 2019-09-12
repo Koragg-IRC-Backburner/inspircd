@@ -24,6 +24,7 @@
 /// $CompilerFlags: -Iexecute("pg_config --includedir" "POSTGRESQL_INCLUDE_DIR")
 /// $LinkerFlags: -Lexecute("pg_config --libdir" "POSTGRESQL_LIBRARY_DIR") -lpq
 
+/// $PackageInfo: require_system("arch") postgresql-libs
 /// $PackageInfo: require_system("centos") postgresql-devel
 /// $PackageInfo: require_system("darwin") postgresql
 /// $PackageInfo: require_system("debian") libpq-dev
@@ -102,7 +103,7 @@ class PgSQLresult : public SQL::Result
 	{
 		rows = PQntuples(res);
 		if (!rows)
-			rows = atoi(PQcmdTuples(res));
+			rows = ConvToNum<int>(PQcmdTuples(res));
 	}
 
 	~PgSQLresult()
@@ -298,6 +299,7 @@ class SQLConn : public SQL::Provider, public EventHandler
 				SocketEngine::ChangeEventMask(this, FD_WANT_POLL_READ | FD_WANT_NO_WRITE);
 				status = WWRITE;
 				DoConnectedPoll();
+				return true;
 			default:
 				return true;
 		}
@@ -391,6 +393,7 @@ restart:
 				SocketEngine::ChangeEventMask(this, FD_WANT_POLL_READ | FD_WANT_NO_WRITE);
 				status = WWRITE;
 				DoConnectedPoll();
+				return true;
 			default:
 				return true;
 		}
@@ -416,6 +419,7 @@ restart:
 
 	void Submit(SQL::Query *req, const std::string& q) CXX11_OVERRIDE
 	{
+		ServerInstance->Logs->Log(MODNAME, LOG_DEBUG, "Executing PostgreSQL query: " + q);
 		if (qinprog.q.empty())
 		{
 			DoQuery(QueueItem(req,q));

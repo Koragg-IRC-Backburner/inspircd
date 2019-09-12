@@ -30,7 +30,10 @@ class Redirect : public ParamMode<Redirect, LocalStringExt>
 {
  public:
 	Redirect(Module* Creator)
-		: ParamMode<Redirect, LocalStringExt>(Creator, "redirect", 'L') { }
+		: ParamMode<Redirect, LocalStringExt>(Creator, "redirect", 'L')
+	{
+		syntax = "<target>";
+	}
 
 	ModeAction OnSet(User* source, Channel* channel, std::string& parameter) CXX11_OVERRIDE
 	{
@@ -111,7 +114,7 @@ class ModuleRedirect : public Module
 					}
 					else
 					{
-						user->WriteNumeric(470, cname, channel, "You may not join this channel, so you are automatically being transferred to the redirect channel.");
+						user->WriteNumeric(470, cname, channel, "You may not join this channel, so you are automatically being transferred to the redirected channel.");
 						Channel::JoinUser(user, channel);
 						return MOD_RES_DENY;
 					}

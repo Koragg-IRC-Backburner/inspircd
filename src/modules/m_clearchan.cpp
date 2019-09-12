@@ -28,7 +28,7 @@ class CommandClearChan : public Command
 	CommandClearChan(Module* Creator)
 		: Command(Creator, "CLEARCHAN", 1, 3)
 	{
-		syntax = "<channel> [<KILL|KICK|G|Z>] [<reason>]";
+		syntax = "<channel> [KILL|KICK|G|Z] [:<reason>]";
 		flags_needed = 'o';
 
 		// Stop the linking mod from forwarding ENCAP'd CLEARCHAN commands, see below why
@@ -211,7 +211,7 @@ class ModuleClearChan : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Adds /CLEARCHAN that allows opers to masskick, masskill or mass G/Z-line users on a channel.", VF_VENDOR|VF_OPTCOMMON);
+		return Version("Provides the CLEARCHAN command that allows opers to masskick, masskill or mass G/Z-line users on a channel", VF_VENDOR|VF_OPTCOMMON);
 	}
 };
 

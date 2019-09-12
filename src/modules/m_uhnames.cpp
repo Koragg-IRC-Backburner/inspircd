@@ -21,24 +21,33 @@
 
 #include "inspircd.h"
 #include "modules/cap.h"
+#include "modules/names.h"
 
-class ModuleUHNames : public Module
+class ModuleUHNames
+	: public Module
+	, public Names::EventListener
 {
+ private:
 	Cap::Capability cap;
 
  public:
-	ModuleUHNames() : cap(this, "userhost-in-names")
+	ModuleUHNames()
+		: Names::EventListener(this)
+		, cap(this, "userhost-in-names")
 	{
 	}
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides the UHNAMES facility.",VF_VENDOR);
+		return Version("Provides the UHNAMES (CAP userhost-in-names) capability", VF_VENDOR);
 	}
 
 	void On005Numeric(std::map<std::string, std::string>& tokens) CXX11_OVERRIDE
 	{
-		tokens["UHNAMES"];
+		// The legacy PROTOCTL system is a wrapper around the cap.
+		dynamic_reference_nocheck<Cap::Manager> capmanager(this, "capmanager");
+		if (capmanager)
+			tokens["UHNAMES"];
 	}
 
 	ModResult OnPreCommand(std::string& command, CommandBase::Params& parameters, LocalUser* user, bool validated) CXX11_OVERRIDE
@@ -59,7 +68,7 @@ class ModuleUHNames : public Module
 		return MOD_RES_PASSTHRU;
 	}
 
-	ModResult OnNamesListItem(User* issuer, Membership* memb, std::string& prefixes, std::string& nick) CXX11_OVERRIDE
+	ModResult OnNamesListItem(LocalUser* issuer, Membership* memb, std::string& prefixes, std::string& nick) CXX11_OVERRIDE
 	{
 		if (cap.get(issuer))
 			nick = memb->user->GetFullHost();

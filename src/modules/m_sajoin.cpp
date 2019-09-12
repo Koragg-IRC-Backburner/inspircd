@@ -29,7 +29,7 @@ class CommandSajoin : public Command
 	CommandSajoin(Module* Creator) : Command(Creator,"SAJOIN", 1)
 	{
 		allow_empty_last_param = false;
-		flags_needed = 'o'; syntax = "[<nick>] <channel>[,<channel>]";
+		flags_needed = 'o'; syntax = "[<nick>] <channel>[,<channel>]+";
 		TRANSLATE2(TR_NICK, TR_TEXT);
 	}
 
@@ -45,7 +45,7 @@ class CommandSajoin : public Command
 		User* dest = ServerInstance->FindNick(nickname);
 		if ((dest) && (dest->registered == REG_ALL))
 		{
-			if (user != dest && !user->HasPrivPermission("users/sajoin-others", false))
+			if (user != dest && !user->HasPrivPermission("users/sajoin-others"))
 			{
 				user->WriteNotice("*** You are not allowed to /SAJOIN other users (the privilege users/sajoin-others is needed to /SAJOIN others).");
 				return CMD_FAILURE;
@@ -53,7 +53,7 @@ class CommandSajoin : public Command
 
 			if (dest->server->IsULine())
 			{
-				user->WriteNumeric(ERR_NOPRIVILEGES, "Cannot use an SA command on a u-lined client");
+				user->WriteNumeric(ERR_NOPRIVILEGES, "Cannot use an SA command on a U-lined client");
 				return CMD_FAILURE;
 			}
 			if (IS_LOCAL(user) && !ServerInstance->IsChannel(channel))
@@ -96,7 +96,7 @@ class CommandSajoin : public Command
 		}
 		else
 		{
-			user->WriteNotice("*** No such nickname "+nickname);
+			user->WriteNotice("*** No such nickname: '" + nickname + "'");
 			return CMD_FAILURE;
 		}
 	}
@@ -118,7 +118,7 @@ class ModuleSajoin : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides command SAJOIN to allow opers to force-join users to channels", VF_OPTCOMMON | VF_VENDOR);
+		return Version("Provides the SAJOIN command, allows opers to force-join users to channels", VF_OPTCOMMON | VF_VENDOR);
 	}
 };
 

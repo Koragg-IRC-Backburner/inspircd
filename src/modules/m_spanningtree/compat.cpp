@@ -35,21 +35,20 @@ void TreeSocket::WriteLine(const std::string& original_line)
 {
 	if (LinkState == CONNECTED)
 	{
-		if (proto_version != ProtocolVersion)
+		if (proto_version != PROTO_NEWEST)
 		{
 			std::string line = original_line;
 			std::string::size_type a = line.find(' ');
 			if (line[0] == '@')
 			{
 				// The line contains tags which the 1202 protocol can't handle.
-				line.erase(0, a);
+				line.erase(0, a + 1);
 				a = line.find(' ');
 			}
 			std::string::size_type b = line.find(' ', a + 1);
 			std::string command(line, a + 1, b-a-1);
 			// now try to find a translation entry
-			// TODO a more efficient lookup method will be needed later
-			if (proto_version < 1205)
+			if (proto_version < PROTO_INSPIRCD_30)
 			{
 				if (command == "IJOIN")
 				{
@@ -287,7 +286,12 @@ void TreeSocket::WriteLine(const std::string& original_line)
 
 						// Synthesize a :<newserver> BURST <time> message
 						spcolon = line.find(" :");
-						line = CmdBuilder(line.substr(spcolon-3, 3), "BURST").push_int(ServerInstance->Time()).str();
+
+						TreeServer* const source = Utils->FindServerID(line.substr(spcolon-3, 3));
+						if (!source)
+							return;
+
+						line = CmdBuilder(source, "BURST").push_int(ServerInstance->Time()).str();
 					}
 				}
 				else if (command == "NUM")
@@ -308,6 +312,11 @@ void TreeSocket::WriteLine(const std::string& original_line)
 					std::string push = InspIRCd::Format(":%.*s PUSH %s ::%s %.*s %s", 3, line.c_str()+1, target->uuid.c_str(), numericsource->GetName().c_str(), 3, line.c_str()+23, target->nick.c_str());
 					push.append(line, 26, std::string::npos);
 					push.swap(line);
+				}
+				else if (command == "TAGMSG")
+				{
+					// Drop IRCv3 tag messages as v2 has no message tag support.
+					return;
 				}
 			}
 			WriteLineNoCompat(line);
@@ -512,6 +521,11 @@ bool TreeSocket::PreProcessOldProtocolMessage(User*& who, std::string& cmd, Comm
 	else if (cmd == "SVSWATCH")
 	{
 		// SVSWATCH was removed because nothing was using it, but better be sure
+		return false;
+	}
+	else if (cmd == "SVSSILENCE")
+	{
+		// SVSSILENCE was removed because nothing was using it, but better be sure
 		return false;
 	}
 	else if (cmd == "PUSH")

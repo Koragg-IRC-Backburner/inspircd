@@ -39,11 +39,14 @@ struct HistoryItem
 struct HistoryList
 {
 	std::deque<HistoryItem> lines;
-	unsigned int maxlen, maxtime;
-	std::string param;
+	unsigned int maxlen;
+	unsigned int maxtime;
 
-	HistoryList(unsigned int len, unsigned int time, const std::string& oparam)
-		: maxlen(len), maxtime(time), param(oparam) { }
+	HistoryList(unsigned int len, unsigned int time)
+		: maxlen(len)
+		, maxtime(time)
+	{
+	}
 };
 
 class HistoryMode : public ParamMode<HistoryMode, SimpleExtItem<HistoryList> >
@@ -53,6 +56,7 @@ class HistoryMode : public ParamMode<HistoryMode, SimpleExtItem<HistoryList> >
 	HistoryMode(Module* Creator)
 		: ParamMode<HistoryMode, SimpleExtItem<HistoryList> >(Creator, "history", 'H')
 	{
+		syntax = "<max-messages>:<max-duration>";
 	}
 
 	ModeAction OnSet(User* source, Channel* channel, std::string& parameter) CXX11_OVERRIDE
@@ -90,25 +94,27 @@ class HistoryMode : public ParamMode<HistoryMode, SimpleExtItem<HistoryList> >
 
 			history->maxlen = len;
 			history->maxtime = time;
-			history->param = parameter;
 		}
 		else
 		{
-			ext.set(channel, new HistoryList(len, time, parameter));
+			ext.set(channel, new HistoryList(len, time));
 		}
 		return MODEACTION_ALLOW;
 	}
 
 	void SerializeParam(Channel* chan, const HistoryList* history, std::string& out)
 	{
-		out.append(history->param);
+		out.append(ConvToStr(history->maxlen));
+		out.append(":");
+		out.append(InspIRCd::DurationString(history->maxtime));
 	}
 };
 
 class ModuleChanHistory
 	: public Module
-	, public ServerEventListener
+	, public ServerProtocol::BroadcastEventListener
 {
+ private:
 	HistoryMode m;
 	bool sendnotice;
 	UserModeReference botmode;
@@ -118,9 +124,34 @@ class ModuleChanHistory
 	IRCv3::Batch::Batch batch;
 	IRCv3::ServerTime::API servertimemanager;
 
+	void SendHistory(LocalUser* user, Channel* channel, HistoryList* list, time_t mintime)
+	{
+		if (batchmanager)
+		{
+			batchmanager->Start(batch);
+			batch.GetBatchStartMessage().PushParamRef(channel->name);
+		}
+
+		for(std::deque<HistoryItem>::iterator i = list->lines.begin(); i != list->lines.end(); ++i)
+		{
+			const HistoryItem& item = *i;
+			if (item.ts >= mintime)
+			{
+				ClientProtocol::Messages::Privmsg msg(ClientProtocol::Messages::Privmsg::nocopy, item.sourcemask, channel, item.text);
+				if (servertimemanager)
+					servertimemanager->Set(msg, item.ts);
+				batch.AddToBatch(msg);
+				user->Send(ServerInstance->GetRFCEvents().privmsg, msg);
+			}
+		}
+
+		if (batchmanager)
+			batchmanager->End(batch);
+	}
+
  public:
 	ModuleChanHistory()
-		: ServerEventListener(this)
+		: ServerProtocol::BroadcastEventListener(this)
 		, m(this)
 		, botmode(this, "bot")
 		, batchcap(this)
@@ -170,44 +201,25 @@ class ModuleChanHistory
 		HistoryList* list = m.ext.get(memb->chan);
 		if (!list)
 			return;
-		time_t mintime = 0;
-		if (list->maxtime)
-			mintime = ServerInstance->Time() - list->maxtime;
 
 		if ((sendnotice) && (!batchcap.get(localuser)))
 		{
 			std::string message("Replaying up to " + ConvToStr(list->maxlen) + " lines of pre-join history");
 			if (list->maxtime > 0)
-				message.append(" spanning up to " + ConvToStr(list->maxtime) + " seconds");
+				message.append(" spanning up to " + InspIRCd::DurationString(list->maxtime));
 			memb->WriteNotice(message);
 		}
 
-		if (batchmanager)
-		{
-			batchmanager->Start(batch);
-			batch.GetBatchStartMessage().PushParamRef(memb->chan->name);
-		}
+		time_t mintime = 0;
+		if (list->maxtime)
+			mintime = ServerInstance->Time() - list->maxtime;
 
-		for(std::deque<HistoryItem>::iterator i = list->lines.begin(); i != list->lines.end(); ++i)
-		{
-			const HistoryItem& item = *i;
-			if (item.ts >= mintime)
-			{
-				ClientProtocol::Messages::Privmsg msg(ClientProtocol::Messages::Privmsg::nocopy, item.sourcemask, memb->chan, item.text);
-				if (servertimemanager)
-					servertimemanager->Set(msg, item.ts);
-				batch.AddToBatch(msg);
-				localuser->Send(ServerInstance->GetRFCEvents().privmsg, msg);
-			}
-		}
-
-		if (batchmanager)
-			batchmanager->End(batch);
+		SendHistory(localuser, memb->chan, list, mintime);
 	}
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides channel history replayed on join", VF_VENDOR);
+		return Version("Provides channel mode +H, allows for the channel message history to be replayed on join", VF_VENDOR);
 	}
 };
 

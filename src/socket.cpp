@@ -98,20 +98,27 @@ int InspIRCd::BindPorts(FailedPortList& failed_ports)
 		const std::string path = tag->getString("path");
 		if (!path.empty())
 		{
+			// Expand the path relative to the config directory.
+			const std::string fullpath = ServerInstance->Config->Paths.PrependData(path);
+
 			// UNIX socket paths are length limited to less than PATH_MAX.
 			irc::sockets::sockaddrs bindspec;
-			if (path.length() > std::min(ServerInstance->Config->Limits.MaxHost, sizeof(bindspec.un.sun_path)))
+			if (fullpath.length() > std::min(ServerInstance->Config->Limits.MaxHost, sizeof(bindspec.un.sun_path) - 1))
 			{
 				this->Logs->Log("SOCKET", LOG_DEFAULT, "UNIX listener on %s at %s specified a path that is too long!",
-					path.c_str(), tag->getTagLocation().c_str());
+					fullpath.c_str(), tag->getTagLocation().c_str());
 				continue;
 			}
 
-			// Create the bindspec manually (aptosa doesn't work with AF_UNIX yet).
-			memset(&bindspec, 0, sizeof(bindspec));
-			bindspec.un.sun_family = AF_UNIX;
-			memcpy(&bindspec.un.sun_path, path.c_str(), sizeof(bindspec.un.sun_path));
+			// Check for characters which are problematic in the IRC message format.
+			if (fullpath.find_first_of("\n\r\t!@: ") != std::string::npos)
+			{
+				this->Logs->Log("SOCKET", LOG_DEFAULT, "UNIX listener on %s at %s specified a path containing invalid characters!",
+					fullpath.c_str(), tag->getTagLocation().c_str());
+				continue;
+			}
 
+			irc::sockets::untosa(fullpath, bindspec);
 			if (!BindPort(tag, bindspec, old_ports))
 				failed_ports.push_back(std::make_pair(bindspec, errno));
 			else
@@ -173,6 +180,28 @@ bool irc::sockets::aptosa(const std::string& addr, int port, irc::sockets::socka
 	}
 	return false;
 }
+
+bool irc::sockets::untosa(const std::string& path, irc::sockets::sockaddrs& sa)
+{
+	memset(&sa, 0, sizeof(sa));
+	if (path.length() >= sizeof(sa.un.sun_path))
+		return false;
+
+	sa.un.sun_family = AF_UNIX;
+	memcpy(&sa.un.sun_path, path.c_str(), path.length() + 1);
+	return true;
+}
+
+bool irc::sockets::isunix(const std::string& file)
+{
+#ifndef _WIN32
+	struct stat sb;
+	if (stat(file.c_str(), &sb) == 0 && S_ISSOCK(sb.st_mode))
+		return true;
+#endif
+	return false;
+}
+
 
 int irc::sockets::sockaddrs::family() const
 {

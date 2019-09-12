@@ -32,7 +32,7 @@ class CommandGloadmodule : public Command
 	CommandGloadmodule(Module* Creator) : Command(Creator,"GLOADMODULE", 1)
 	{
 		flags_needed = 'o';
-		syntax = "<modulename> [servermask]";
+		syntax = "<modulename> [<servermask>]";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -71,7 +71,7 @@ class CommandGunloadmodule : public Command
 	CommandGunloadmodule(Module* Creator) : Command(Creator,"GUNLOADMODULE", 1)
 	{
 		flags_needed = 'o';
-		syntax = "<modulename> [servermask]";
+		syntax = "<modulename> [<servermask>]";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -122,7 +122,7 @@ class CommandGreloadmodule : public Command
  public:
 	CommandGreloadmodule(Module* Creator) : Command(Creator, "GRELOADMODULE", 1)
 	{
-		flags_needed = 'o'; syntax = "<modulename> [servermask]";
+		flags_needed = 'o'; syntax = "<modulename> [<servermask>]";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -169,7 +169,7 @@ class ModuleGlobalLoad : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Allows global loading of a module.", VF_COMMON | VF_VENDOR);
+		return Version("Allows global loading of a module", VF_COMMON | VF_VENDOR);
 	}
 };
 

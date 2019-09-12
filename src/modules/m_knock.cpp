@@ -46,7 +46,7 @@ class CommandKnock : public Command
 		, noknockmode(Noknockmode)
 		, inviteonlymode(Creator, "inviteonly")
 	{
-		syntax = "<channel> <reason>";
+		syntax = "<channel> :<reason>";
 		Penalty = 5;
 	}
 
@@ -133,7 +133,7 @@ class ModuleKnock : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for /KNOCK and channel mode +K", VF_OPTCOMMON | VF_VENDOR);
+		return Version("Provides the KNOCK command and channel mode +K", VF_OPTCOMMON | VF_VENDOR);
 	}
 };
 

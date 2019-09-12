@@ -26,7 +26,7 @@ CommandRestart::CommandRestart(Module* parent, std::string& hashref)
 	, hash(hashref)
 {
 	flags_needed = 'o';
-	syntax = "<server>";
+	syntax = "<servername>";
 }
 
 CmdResult CommandRestart::Handle(User* user, const Params& parameters)
@@ -59,7 +59,7 @@ CmdResult CommandRestart::Handle(User* user, const Params& parameters)
 	}
 	else
 	{
-		ServerInstance->SNO->WriteGlobalSno('a', "Failed RESTART Command from %s.", user->GetFullRealHost().c_str());
+		ServerInstance->SNO->WriteGlobalSno('a', "Failed RESTART command from %s.", user->GetFullRealHost().c_str());
 	}
 	return CMD_FAILURE;
 }

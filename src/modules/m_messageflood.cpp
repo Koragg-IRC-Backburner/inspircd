@@ -24,6 +24,7 @@
 
 
 #include "inspircd.h"
+#include "modules/ctctags.h"
 #include "modules/exemption.h"
 
 /** Holds flood settings and state for mode +f
@@ -35,7 +36,7 @@ class floodsettings
 	unsigned int secs;
 	unsigned int lines;
 	time_t reset;
-	insp::flat_map<User*, unsigned int> counters;
+	insp::flat_map<User*, double> counters;
 
 	floodsettings(bool a, unsigned int b, unsigned int c)
 		: ban(a)
@@ -45,7 +46,7 @@ class floodsettings
 		reset = ServerInstance->Time() + secs;
 	}
 
-	bool addmessage(User* who)
+	bool addmessage(User* who, double weight)
 	{
 		if (ServerInstance->Time() > reset)
 		{
@@ -53,7 +54,8 @@ class floodsettings
 			reset = ServerInstance->Time() + secs;
 		}
 
-		return (++counters[who] >= this->lines);
+		counters[who] += weight;
+		return (counters[who] >= this->lines);
 	}
 
 	void clear(User* who)
@@ -70,6 +72,7 @@ class MsgFlood : public ParamMode<MsgFlood, SimpleExtItem<floodsettings> >
 	MsgFlood(Module* Creator)
 		: ParamMode<MsgFlood, SimpleExtItem<floodsettings> >(Creator, "flood", 'f')
 	{
+		syntax = "[*]<messages>:<seconds>";
 	}
 
 	ModeAction OnSet(User* source, Channel* channel, std::string& parameter) CXX11_OVERRIDE
@@ -105,20 +108,34 @@ class MsgFlood : public ParamMode<MsgFlood, SimpleExtItem<floodsettings> >
 	}
 };
 
-class ModuleMsgFlood : public Module
+class ModuleMsgFlood
+	: public Module
+	, public CTCTags::EventListener
 {
+private:
 	CheckExemption::EventProvider exemptionprov;
 	MsgFlood mf;
+	double notice;
+	double privmsg;
+	double tagmsg;
 
  public:
-
 	ModuleMsgFlood()
-		: exemptionprov(this)
+		: CTCTags::EventListener(this)
+		, exemptionprov(this)
 		, mf(this)
 	{
 	}
 
-	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	void ReadConfig(ConfigStatus&) CXX11_OVERRIDE
+	{
+		ConfigTag* tag = ServerInstance->Config->ConfValue("messageflood");
+		notice = tag->getFloat("notice", 1.0);
+		privmsg = tag->getFloat("privmsg", 1.0);
+		tagmsg = tag->getFloat("tagmsg", 0.2);
+	}
+
+	ModResult HandleMessage(User* user, const MessageTarget& target, double weight)
 	{
 		if (target.type != MessageTarget::TYPE_CHANNEL)
 			return MOD_RES_PASSTHRU;
@@ -134,7 +151,7 @@ class ModuleMsgFlood : public Module
 		floodsettings *f = mf.ext.get(dest);
 		if (f)
 		{
-			if (f->addmessage(user))
+			if (f->addmessage(user, weight))
 			{
 				/* Youre outttta here! */
 				f->clear(user);
@@ -157,6 +174,16 @@ class ModuleMsgFlood : public Module
 		return MOD_RES_PASSTHRU;
 	}
 
+	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target, (details.type == MSG_PRIVMSG ? privmsg : notice));
+	}
+
+	ModResult OnUserPreTagMessage(User* user, const MessageTarget& target, CTCTags::TagMessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target, tagmsg);
+	}
+
 	void Prioritize() CXX11_OVERRIDE
 	{
 		// we want to be after all modules that might deny the message (e.g. m_muteban, m_noctcp, m_blockcolor, etc.)
@@ -165,7 +192,7 @@ class ModuleMsgFlood : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides channel mode +f (message flood protection)", VF_VENDOR);
+		return Version("Provides channel mode +f, message flood protection", VF_VENDOR);
 	}
 };
 

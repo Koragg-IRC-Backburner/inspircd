@@ -21,6 +21,7 @@
 #include "modules/ssl.h"
 #include "modules/webirc.h"
 #include "modules/whois.h"
+#include "modules/who.h"
 
 enum
 {
@@ -57,12 +58,12 @@ class SSLCertExt : public ExtensionItem
 		free(container, unset_raw(container));
 	}
 
-	std::string serialize(SerializeFormat format, const Extensible* container, void* item) const CXX11_OVERRIDE
+	std::string ToNetwork(const Extensible* container, void* item) const CXX11_OVERRIDE
 	{
 		return static_cast<ssl_cert*>(item)->GetMetaLine();
 	}
 
-	void unserialize(SerializeFormat format, Extensible* container, const std::string& value) CXX11_OVERRIDE
+	void FromNetwork(Extensible* container, const std::string& value) CXX11_OVERRIDE
 	{
 		ssl_cert* cert = new ssl_cert;
 		set(container, cert);
@@ -184,14 +185,21 @@ class ModuleSSLInfo
 	: public Module
 	, public WebIRC::EventListener
 	, public Whois::EventListener
+	, public Who::EventListener
 {
  private:
 	CommandSSLInfo cmd;
+
+	bool MatchFP(ssl_cert* const cert, const std::string& fp) const
+	{
+		return irc::spacesepstream(fp).Contains(cert->GetFingerprint());
+	}
 
  public:
 	ModuleSSLInfo()
 		: WebIRC::EventListener(this)
 		, Whois::EventListener(this)
+		, Who::EventListener(this)
 		, cmd(this)
 	{
 	}
@@ -213,6 +221,19 @@ class ModuleSSLInfo
 		}
 	}
 
+	ModResult OnWhoLine(const Who::Request& request, LocalUser* source, User* user, Membership* memb, Numeric::Numeric& numeric) CXX11_OVERRIDE
+	{
+		size_t flag_index;
+		if (!request.GetFieldIndex('f', flag_index))
+			return MOD_RES_PASSTHRU;
+
+		ssl_cert* cert = cmd.sslapi.GetCertificate(user);
+		if (cert)
+			numeric.GetParams()[flag_index].push_back('s');
+
+		return MOD_RES_PASSTHRU;
+	}
+
 	ModResult OnPreCommand(std::string& command, CommandBase::Params& parameters, LocalUser* user, bool validated) CXX11_OVERRIDE
 	{
 		if ((command == "OPER") && (validated))
@@ -231,7 +252,7 @@ class ModuleSSLInfo
 				}
 
 				std::string fingerprint;
-				if (ifo->oper_block->readString("fingerprint", fingerprint) && (!cert || cert->GetFingerprint() != fingerprint))
+				if (ifo->oper_block->readString("fingerprint", fingerprint) && (!cert || !MatchFP(cert, fingerprint)))
 				{
 					user->WriteNumeric(ERR_NOOPERHOST, "This oper login requires a matching SSL certificate fingerprint.");
 					user->CommandFloodPenalty += 10000;
@@ -275,14 +296,14 @@ class ModuleSSLInfo
 		{
 			OperInfo* ifo = i->second;
 			std::string fp = ifo->oper_block->getString("fingerprint");
-			if (fp == cert->fingerprint && ifo->oper_block->getBool("autologin"))
+			if (MatchFP(cert, fp) && ifo->oper_block->getBool("autologin"))
 				user->Oper(ifo);
 		}
 	}
 
 	ModResult OnSetConnectClass(LocalUser* user, ConnectClass* myclass) CXX11_OVERRIDE
 	{
-		ssl_cert* cert = SSLClientCert::GetCertificate(&user->eh);
+		ssl_cert* cert = cmd.sslapi.GetCertificate(user);
 		bool ok = true;
 		if (myclass->config->getString("requiressl") == "trusted")
 		{
@@ -292,7 +313,7 @@ class ModuleSSLInfo
 		else if (myclass->config->getBool("requiressl"))
 		{
 			ok = (cert != NULL);
-			ServerInstance->Logs->Log("CONNECTCLASS", LOG_DEBUG, "Class requires any SSL cert. Client %s one.", (ok ? "has" : "does not have"));
+			ServerInstance->Logs->Log("CONNECTCLASS", LOG_DEBUG, "Class requires SSL. Client %s using SSL.", (ok ? "is" : "is not"));
 		}
 
 		if (!ok)

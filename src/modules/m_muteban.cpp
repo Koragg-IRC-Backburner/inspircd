@@ -19,16 +19,33 @@
 
 
 #include "inspircd.h"
+#include "modules/ctctags.h"
 
-class ModuleQuietBan : public Module
+class ModuleQuietBan
+	: public Module
+	, public CTCTags::EventListener
 {
+ private:
+	bool notifyuser;
+
  public:
-	Version GetVersion() CXX11_OVERRIDE
+	ModuleQuietBan()
+		: CTCTags::EventListener(this)
 	{
-		return Version("Implements extban +b m: - mute bans",VF_OPTCOMMON|VF_VENDOR);
 	}
 
-	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	void ReadConfig(ConfigStatus& status) CXX11_OVERRIDE
+	{
+		ConfigTag* tag = ServerInstance->Config->ConfValue("muteban");
+		notifyuser = tag->getBool("notifyuser", true);
+	}
+
+	Version GetVersion() CXX11_OVERRIDE
+	{
+		return Version("Provides extban 'm', mute bans", VF_OPTCOMMON|VF_VENDOR);
+	}
+
+	ModResult HandleMessage(User* user, const MessageTarget& target, bool& echo_original)
 	{
 		if (!IS_LOCAL(user) || target.type != MessageTarget::TYPE_CHANNEL)
 			return MOD_RES_PASSTHRU;
@@ -36,10 +53,9 @@ class ModuleQuietBan : public Module
 		Channel* chan = target.Get<Channel>();
 		if (chan->GetExtBanStatus(user, 'm') == MOD_RES_DENY && chan->GetPrefixValue(user) < VOICE_VALUE)
 		{
-			bool notifyuser = ServerInstance->Config->ConfValue("muteban")->getBool("notifyuser", true);
 			if (!notifyuser)
 			{
-				details.echo_original = true;
+				echo_original = true;
 				return MOD_RES_DENY;
 			}
 
@@ -48,6 +64,16 @@ class ModuleQuietBan : public Module
 		}
 
 		return MOD_RES_PASSTHRU;
+	}
+
+	ModResult OnUserPreMessage(User* user, const MessageTarget& target, MessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target, details.echo_original);
+	}
+
+	ModResult OnUserPreTagMessage(User* user, const MessageTarget& target, CTCTags::TagMessageDetails& details) CXX11_OVERRIDE
+	{
+		return HandleMessage(user, target, details.echo_original);
 	}
 
 	void On005Numeric(std::map<std::string, std::string>& tokens) CXX11_OVERRIDE

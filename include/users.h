@@ -456,17 +456,16 @@ class CoreExport User : public Extensible
 	 * @param command A command (should be all CAPS)
 	 * @return True if this user can execute the command
 	 */
-	virtual bool HasPermission(const std::string &command);
+	virtual bool HasCommandPermission(const std::string& command);
 
 	/** Returns true if a user has a given permission.
 	 * This is used to check whether or not users may perform certain actions which admins may not wish to give to
 	 * all operators, yet are not commands. An example might be oper override, mass messaging (/notice $*), etc.
 	 *
 	 * @param privstr The priv to chec, e.g. "users/override/topic". These are loaded free-form from the config file.
-	 * @param noisy If set to true, the user is notified that they do not have the specified permission where applicable. If false, no notification is sent.
 	 * @return True if this user has the permission in question.
 	 */
-	virtual bool HasPrivPermission(const std::string &privstr, bool noisy = false);
+	virtual bool HasPrivPermission(const std::string& privstr);
 
 	/** Returns true or false if a user can set a privileged user or channel mode.
 	 * This is done by looking up their oper type from User::oper, then referencing
@@ -701,6 +700,11 @@ class CoreExport UserIOHandler : public StreamSocket
 	 * @param data The data to add to the write buffer
 	 */
 	void AddWriteBuf(const std::string &data);
+
+	/** Swaps the internals of this UserIOHandler with another one.
+	 * @param other A UserIOHandler to swap internals with.
+	 */
+	void SwapInternals(UserIOHandler& other);
 };
 
 typedef unsigned int already_sent_t;
@@ -772,11 +776,6 @@ class CoreExport LocalUser : public User, public insp::intrusive_list_node<Local
 	 */
 	irc::sockets::sockaddrs server_sa;
 
-	/**
-	 * @return The port number of this user.
-	 */
-	int GetServerPort();
-
 	/** Recursion fix: user is out of SendQ and will be quit as soon as possible.
 	 * This can't be handled normally because QuitUser itself calls Write on other
 	 * users, which could trigger their SendQ to overrun.
@@ -791,9 +790,8 @@ class CoreExport LocalUser : public User, public insp::intrusive_list_node<Local
 	 */
 	unsigned int exempt:1;
 
-	/** Used by PING checking code
-	 */
-	time_t nping;
+	/** The time at which this user should be pinged next. */
+	time_t nextping;
 
 	/** Time that the connection last sent a message, used to calculate idle time
 	 */
@@ -839,17 +837,16 @@ class CoreExport LocalUser : public User, public insp::intrusive_list_node<Local
 	 * @param command A command (should be all CAPS)
 	 * @return True if this user can execute the command
 	 */
-	bool HasPermission(const std::string &command) CXX11_OVERRIDE;
+	bool HasCommandPermission(const std::string& command) CXX11_OVERRIDE;
 
 	/** Returns true if a user has a given permission.
 	 * This is used to check whether or not users may perform certain actions which admins may not wish to give to
 	 * all operators, yet are not commands. An example might be oper override, mass messaging (/notice $*), etc.
 	 *
 	 * @param privstr The priv to chec, e.g. "users/override/topic". These are loaded free-form from the config file.
-	 * @param noisy If set to true, the user is notified that they do not have the specified permission where applicable. If false, no notification is sent.
 	 * @return True if this user has the permission in question.
 	 */
-	bool HasPrivPermission(const std::string &privstr, bool noisy = false) CXX11_OVERRIDE;
+	bool HasPrivPermission(const std::string& privstr) CXX11_OVERRIDE;
 
 	/** Returns true or false if a user can set a privileged user or channel mode.
 	 * This is done by looking up their oper type from User::oper, then referencing

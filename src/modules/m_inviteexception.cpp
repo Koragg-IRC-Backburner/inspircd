@@ -42,6 +42,7 @@ class InviteException : public ListModeBase
 	InviteException(Module* Creator)
 		: ListModeBase(Creator, "invex", 'I', "End of Channel Invite Exception List", 346, 347, true)
 	{
+		syntax = "<mask>";
 	}
 };
 
@@ -91,7 +92,7 @@ public:
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for the +I channel mode", VF_VENDOR);
+		return Version("Provides channel mode +I, invite exceptions", VF_VENDOR);
 	}
 };
 

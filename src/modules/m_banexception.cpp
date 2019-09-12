@@ -41,6 +41,7 @@ class BanException : public ListModeBase
 	BanException(Module* Creator)
 		: ListModeBase(Creator, "banexception", 'e', "End of Channel Exception List", 348, 349, true)
 	{
+		syntax = "<mask>";
 	}
 };
 
@@ -107,7 +108,7 @@ class ModuleBanException : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for the +e channel mode", VF_VENDOR);
+		return Version("Provides channel mode +e, ban exceptions", VF_VENDOR);
 	}
 };
 

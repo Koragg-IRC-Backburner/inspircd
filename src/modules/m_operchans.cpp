@@ -40,9 +40,16 @@ class OperChans : public SimpleChannelModeHandler
 
 class ModuleOperChans : public Module
 {
+ private:
 	OperChans oc;
+	std::string space;
+	std::string underscore;
+
  public:
-	ModuleOperChans() : oc(this)
+	ModuleOperChans()
+		: oc(this)
+		, space(" ")
+		, underscore("_")
 	{
 	}
 
@@ -50,19 +57,33 @@ class ModuleOperChans : public Module
 	{
 		if (chan && chan->IsModeSet(oc) && !user->IsOper())
 		{
-			user->WriteNumeric(ERR_CANTJOINOPERSONLY, chan->name, InspIRCd::Format("Only IRC operators may join %s (+O is set)", chan->name.c_str()));
+			user->WriteNumeric(ERR_CANTJOINOPERSONLY, chan->name, InspIRCd::Format("Only server operators may join %s (+O is set)", chan->name.c_str()));
 			return MOD_RES_DENY;
 		}
 		return MOD_RES_PASSTHRU;
 	}
 
-	ModResult OnCheckBan(User *user, Channel *c, const std::string& mask) CXX11_OVERRIDE
+	ModResult OnCheckBan(User* user, Channel* chan, const std::string& mask) CXX11_OVERRIDE
 	{
-		if ((mask.length() > 2) && (mask[0] == 'O') && (mask[1] == ':'))
-		{
-			if (user->IsOper() && InspIRCd::Match(user->oper->name, mask.substr(2)))
-				return MOD_RES_DENY;
-		}
+		// Check whether the entry is an extban.
+		if (mask.length() <= 2 || mask[0] != 'O' || mask[1] != ':')
+			return MOD_RES_PASSTHRU;
+
+		// If the user is not an oper they can't match this.
+		if (!user->IsOper())
+			return MOD_RES_PASSTHRU;
+
+		// Check whether the oper's type matches the ban.
+		const std::string submask = mask.substr(2);
+		if (InspIRCd::Match(user->oper->name, submask))
+			return MOD_RES_DENY;
+
+		// If the oper's type contains spaces recheck with underscores.
+		std::string opername(user->oper->name);
+		stdalgo::string::replace_all(opername, space, underscore);
+		if (InspIRCd::Match(opername, submask))
+			return MOD_RES_DENY;
+
 		return MOD_RES_PASSTHRU;
 	}
 
@@ -73,7 +94,7 @@ class ModuleOperChans : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for oper-only chans via the +O channel mode and 'O' extban", VF_VENDOR);
+		return Version("Provides support for oper-only channels via channel mode +O and extban 'O'", VF_VENDOR);
 	}
 };
 

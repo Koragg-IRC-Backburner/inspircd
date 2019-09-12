@@ -291,42 +291,52 @@ class Cap::ManagerImpl : public Cap::Manager, public ReloadModule::EventListener
 	}
 };
 
+namespace
+{
+	std::string SerializeCaps(const Extensible* container, void* item, bool human)
+	{
+		// XXX: Cast away the const because IS_LOCAL() doesn't handle it
+		LocalUser* user = IS_LOCAL(const_cast<User*>(static_cast<const User*>(container)));
+		if (!user)
+			return std::string();
+
+		// List requested caps
+		std::string ret;
+		managerimpl->HandleList(ret, user, false, false);
+
+		// Serialize cap protocol version. If building a human-readable string append a new token, otherwise append only a single character indicating the version.
+		Cap::Protocol protocol = managerimpl->GetProtocol(user);
+		if (human)
+			ret.append("capversion=3.");
+		else if (!ret.empty())
+			ret.erase(ret.length()-1);
+
+		if (protocol == Cap::CAP_302)
+			ret.push_back('2');
+		else
+			ret.push_back('1');
+
+		return ret;
+	}
+}
+
 Cap::ExtItem::ExtItem(Module* mod)
 	: LocalIntExt("caps", ExtensionItem::EXT_USER, mod)
 {
 }
 
-std::string Cap::ExtItem::serialize(SerializeFormat format, const Extensible* container, void* item) const
+std::string Cap::ExtItem::ToHuman(const Extensible* container, void* item) const
 {
-	std::string ret;
-	// XXX: Cast away the const because IS_LOCAL() doesn't handle it
-	LocalUser* user = IS_LOCAL(const_cast<User*>(static_cast<const User*>(container)));
-	if ((format == FORMAT_NETWORK) || (!user))
-		return ret;
-
-	// List requested caps
-	managerimpl->HandleList(ret, user, false, false);
-
-	// Serialize cap protocol version. If building a human-readable string append a new token, otherwise append only a single character indicating the version.
-	Protocol protocol = managerimpl->GetProtocol(user);
-	if (format == FORMAT_USER)
-		ret.append("capversion=3.");
-	else if (!ret.empty())
-		ret.erase(ret.length()-1);
-
-	if (protocol == CAP_302)
-		ret.push_back('2');
-	else
-		ret.push_back('1');
-
-	return ret;
+	return SerializeCaps(container, item, true);
 }
 
-void Cap::ExtItem::unserialize(SerializeFormat format, Extensible* container, const std::string& value)
+std::string Cap::ExtItem::ToInternal(const Extensible* container, void* item) const
 {
-	if (format == FORMAT_NETWORK)
-		return;
+	return SerializeCaps(container, item, false);
+}
 
+void Cap::ExtItem::FromInternal(Extensible* container, const std::string& value)
+{
 	LocalUser* user = IS_LOCAL(static_cast<User*>(container));
 	if (!user)
 		return; // Can't happen
@@ -407,13 +417,21 @@ class CommandCap : public SplitCommand
 		}
 		else if ((subcommand == "LS") || (subcommand == "LIST"))
 		{
+			Cap::Protocol capversion = Cap::CAP_LEGACY;
 			const bool is_ls = (subcommand.length() == 2);
-			if ((is_ls) && (parameters.size() > 1) && (parameters[1] == "302"))
-				manager.Set302Protocol(user);
+			if ((is_ls) && (parameters.size() > 1))
+			{
+				unsigned int version = ConvToNum<unsigned int>(parameters[1]);
+				if (version >= 302)
+				{
+					capversion = Cap::CAP_302;
+					manager.Set302Protocol(user);
+				}
+			}
 
 			std::string result;
 			// Show values only if supports v3.2 and doing LS
-			manager.HandleList(result, user, is_ls, ((is_ls) && (manager.GetProtocol(user) != Cap::CAP_LEGACY)));
+			manager.HandleList(result, user, is_ls, ((is_ls) && (capversion != Cap::CAP_LEGACY)));
 			DisplayResult(user, subcommand, result);
 		}
 		else if ((subcommand == "CLEAR") && (manager.GetProtocol(user) == Cap::CAP_LEGACY))

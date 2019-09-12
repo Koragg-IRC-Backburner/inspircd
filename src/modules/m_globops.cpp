@@ -30,11 +30,17 @@ class CommandGlobops : public Command
  public:
 	CommandGlobops(Module* Creator) : Command(Creator,"GLOBOPS", 1,1)
 	{
-		flags_needed = 'o'; syntax = "<any-text>";
+		flags_needed = 'o'; syntax = ":<message>";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
 	{
+		if (parameters[0].empty())
+		{
+			user->WriteNumeric(ERR_NOTEXTTOSEND, "No text to send");
+			return CMD_FAILURE;
+		}
+
 		ServerInstance->SNO->WriteGlobalSno('g', "From " + user->nick + ": " + parameters[0]);
 		return CMD_SUCCESS;
 	}
@@ -53,7 +59,7 @@ class ModuleGlobops : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for GLOBOPS and snomask +g", VF_VENDOR);
+		return Version("Provides the GLOBOPS command and snomask 'g'", VF_VENDOR);
 	}
 };
 

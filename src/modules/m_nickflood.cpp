@@ -54,10 +54,6 @@ class nickfloodsettings
 
 	bool shouldlock()
 	{
-		/* XXX HACK: using counter + 1 here now to allow the counter to only be incremented
-		 * on successful nick changes; this will be checked before the counter is
-		 * incremented.
-		 */
 		return ((ServerInstance->Time() <= reset) && (counter == this->nicks));
 	}
 
@@ -88,6 +84,7 @@ class NickFlood : public ParamMode<NickFlood, SimpleExtItem<nickfloodsettings> >
 	NickFlood(Module* Creator)
 		: ParamMode<NickFlood, SimpleExtItem<nickfloodsettings> >(Creator, "nickflood", 'F')
 	{
+		syntax = "<nick-changes>:<seconds>";
 	}
 
 	ModeAction OnSet(User* source, Channel* channel, std::string& parameter) CXX11_OVERRIDE
@@ -202,7 +199,7 @@ class ModuleNickFlood : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Channel mode F - nick flood protection", VF_VENDOR);
+		return Version("Provides channel mode +F, nick flood protection", VF_VENDOR);
 	}
 };
 

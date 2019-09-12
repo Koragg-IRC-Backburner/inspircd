@@ -27,7 +27,6 @@
 #include "treeserver.h"
 #include "main.h"
 #include "commands.h"
-#include "modules/server.h"
 
 /**
  * Creates FMODE messages, used only when syncing channels
@@ -103,7 +102,7 @@ struct TreeSocket::BurstState
  */
 void TreeSocket::DoBurst(TreeServer* s)
 {
-	ServerInstance->SNO->WriteToSnoMask('l',"Bursting to \2%s\2 (Authentication: %s%s).",
+	ServerInstance->SNO->WriteToSnoMask('l',"Bursting to \002%s\002 (Authentication: %s%s).",
 		s->GetName().c_str(),
 		capab->auth_fingerprint ? "SSL certificate fingerprint and " : "",
 		capab->auth_challenge ? "challenge-response" : "plaintext password");
@@ -123,9 +122,9 @@ void TreeSocket::DoBurst(TreeServer* s)
 
 	// Send all xlines
 	this->SendXLines();
-	FOREACH_MOD_CUSTOM(Utils->Creator->GetEventProvider(), ServerEventListener, OnSyncNetwork, (bs.server));
+	FOREACH_MOD_CUSTOM(Utils->Creator->GetSyncEventProvider(), ServerProtocol::SyncEventListener, OnSyncNetwork, (bs.server));
 	this->WriteLine(CmdBuilder("ENDBURST"));
-	ServerInstance->SNO->WriteToSnoMask('l',"Finished bursting to \2"+ s->GetName()+"\2.");
+	ServerInstance->SNO->WriteToSnoMask('l',"Finished bursting to \002"+ s->GetName()+"\002.");
 
 	this->burstsent = true;
 }
@@ -260,12 +259,12 @@ void TreeSocket::SyncChannel(Channel* chan, BurstState& bs)
 	for (Extensible::ExtensibleStore::const_iterator i = chan->GetExtList().begin(); i != chan->GetExtList().end(); i++)
 	{
 		ExtensionItem* item = i->first;
-		std::string value = item->serialize(FORMAT_NETWORK, chan, i->second);
+		std::string value = item->ToNetwork(chan, i->second);
 		if (!value.empty())
 			this->WriteLine(CommandMetadata::Builder(chan, item->name, value));
 	}
 
-	FOREACH_MOD_CUSTOM(Utils->Creator->GetEventProvider(), ServerEventListener, OnSyncChannel, (chan, bs.server));
+	FOREACH_MOD_CUSTOM(Utils->Creator->GetSyncEventProvider(), ServerProtocol::SyncEventListener, OnSyncChannel, (chan, bs.server));
 }
 
 void TreeSocket::SyncChannel(Channel* chan)
@@ -296,11 +295,11 @@ void TreeSocket::SendUsers(BurstState& bs)
 		for (Extensible::ExtensibleStore::const_iterator i = exts.begin(); i != exts.end(); ++i)
 		{
 			ExtensionItem* item = i->first;
-			std::string value = item->serialize(FORMAT_NETWORK, u->second, i->second);
+			std::string value = item->ToNetwork(u->second, i->second);
 			if (!value.empty())
 				this->WriteLine(CommandMetadata::Builder(user, item->name, value));
 		}
 
-		FOREACH_MOD_CUSTOM(Utils->Creator->GetEventProvider(), ServerEventListener, OnSyncUser, (user, bs.server));
+		FOREACH_MOD_CUSTOM(Utils->Creator->GetSyncEventProvider(), ServerProtocol::SyncEventListener, OnSyncUser, (user, bs.server));
 	}
 }

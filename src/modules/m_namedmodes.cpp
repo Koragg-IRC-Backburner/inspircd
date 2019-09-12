@@ -38,10 +38,11 @@ static void DisplayList(LocalUser* user, Channel* channel)
 		if (!channel->IsModeSet(mh))
 			continue;
 		numeric.Add("+" + mh->name);
-		if (mh->NeedsParam(true))
+		ParamModeBase* pm = mh->IsParameterMode();
+		if (pm)
 		{
-			if ((mh->name == "key") && (!channel->HasUser(user)) && (!user->HasPrivPermission("channels/auspex")))
-				numeric.Add("<key>");
+			if ((pm->IsParameterSecret()) && (!channel->HasUser(user)) && (!user->HasPrivPermission("channels/auspex")))
+				numeric.Add("<" + mh->name + ">");
 			else
 				numeric.Add(channel->GetModeParameter(mh));
 		}
@@ -56,7 +57,7 @@ class CommandProp : public SplitCommand
 	CommandProp(Module* parent)
 		: SplitCommand(parent, "PROP", 1)
 	{
-		syntax = "<user|channel> {[+-]<mode> [<value>]}*";
+		syntax = "<channel> [[(+|-)]<mode> [<value>]]";
 	}
 
 	CmdResult HandleLocal(LocalUser* src, const Params& parameters) CXX11_OVERRIDE
@@ -128,7 +129,7 @@ class ModuleNamedModes : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides the ability to manipulate modes via long names.",VF_VENDOR);
+		return Version("Provides the ability to manipulate modes via long names", VF_VENDOR);
 	}
 
 	void Prioritize() CXX11_OVERRIDE

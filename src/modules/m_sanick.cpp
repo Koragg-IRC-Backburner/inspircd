@@ -29,7 +29,7 @@ class CommandSanick : public Command
 	CommandSanick(Module* Creator) : Command(Creator,"SANICK", 2)
 	{
 		allow_empty_last_param = false;
-		flags_needed = 'o'; syntax = "<nick> <new-nick>";
+		flags_needed = 'o'; syntax = "<nick> <newnick>";
 		TRANSLATE2(TR_NICK, TR_TEXT);
 	}
 
@@ -42,7 +42,7 @@ class CommandSanick : public Command
 		{
 			if (target && target->server->IsULine())
 			{
-				user->WriteNumeric(ERR_NOPRIVILEGES, "Cannot use an SA command on a u-lined client");
+				user->WriteNumeric(ERR_NOPRIVILEGES, "Cannot use an SA command on a U-lined client");
 				return CMD_FAILURE;
 			}
 
@@ -54,7 +54,7 @@ class CommandSanick : public Command
 
 			if (!ServerInstance->IsNick(parameters[1]))
 			{
-				user->WriteNotice("*** Invalid nickname '" + parameters[1] + "'");
+				user->WriteNotice("*** Invalid nickname: '" + parameters[1] + "'");
 				return CMD_FAILURE;
 			}
 		}
@@ -95,7 +95,7 @@ class ModuleSanick : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for SANICK command", VF_OPTCOMMON | VF_VENDOR);
+		return Version("Provides the SANICK command, allows opers to change the nicknames of users", VF_OPTCOMMON | VF_VENDOR);
 	}
 };
 

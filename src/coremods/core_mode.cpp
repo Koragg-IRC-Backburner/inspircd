@@ -19,14 +19,48 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #include "inspircd.h"
-#include "core_user.h"
+
+class CommandMode : public Command
+{
+	unsigned int sent[256];
+	unsigned int seq;
+
+	/** Show the list of one or more list modes to a user.
+	 * @param user User to send to.
+	 * @param chan Channel whose lists to show.
+	 * @param mode_sequence Mode letters to show the lists of.
+	 */
+	void DisplayListModes(User* user, Channel* chan, const std::string& mode_sequence);
+
+	/** Show the current modes of a channel or a user to a user.
+	 * @param user User to show the modes to.
+	 * @param targetuser User whose modes to show. NULL if showing the modes of a channel.
+	 * @param targetchannel Channel whose modes to show. NULL if showing the modes of a user.
+	 */
+	void DisplayCurrentModes(User* user, User* targetuser, Channel* targetchannel);
+
+ public:
+	/** Constructor for mode.
+	 */
+	CommandMode(Module* parent);
+
+	/** Handle command.
+	 * @param parameters The parameters to the command
+	 * @param user The user issuing the command
+	 * @return A value from CmdResult to indicate command success or failure.
+	 */
+	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE;
+
+	RouteDescriptor GetRouting(User* user, const Params& parameters) CXX11_OVERRIDE;
+};
 
 CommandMode::CommandMode(Module* parent)
 	: Command(parent, "MODE", 1)
 	, seq(0)
 {
-	syntax = "<target> <modes> {<mode-parameters>}";
+	syntax = "<target> [[(+|-)]<modes> [<mode-parameters>]]";
 	memset(&sent, 0, sizeof(sent));
 }
 
@@ -144,12 +178,58 @@ static std::string GetSnomasks(const User* user)
 	return snomaskstr;
 }
 
+namespace
+{
+	void GetModeList(Numeric::Numeric& num, Channel* chan, User* user)
+	{
+		// We should only show the value of secret parameters (i.e. key) if
+		// the user is a member of the channel.
+		bool show_secret = chan->HasUser(user);
+
+		size_t modepos = num.push("+").GetParams().size() - 1;
+		std::string modes;
+		std::string param;
+		for (unsigned char chr = 65; chr < 123; ++chr)
+		{
+			// Check that the mode exists and is set.
+			ModeHandler* mh = ServerInstance->Modes->FindMode(chr, MODETYPE_CHANNEL);
+			if (!mh || !chan->IsModeSet(mh))
+				continue;
+
+			// Add the mode to the set list.
+			modes.push_back(mh->GetModeChar());
+
+			// If the mode has a parameter we need to include that too.
+			ParamModeBase* pm = mh->IsParameterMode();
+			if (!pm)
+				continue;
+
+			// If a mode has a secret parameter and the user is not privy to
+			// the value of it then we use <name> instead of the value.
+			if (pm->IsParameterSecret() && !show_secret)
+			{
+				num.push("<" + pm->name + ">");
+				continue;
+			}
+
+			// Retrieve the parameter and add it to the mode list.
+			pm->GetParameter(chan, param);
+			num.push(param);
+			param.clear();
+		}
+		num.GetParams()[modepos].append(modes);
+	}
+}
+
 void CommandMode::DisplayCurrentModes(User* user, User* targetuser, Channel* targetchannel)
 {
 	if (targetchannel)
 	{
 		// Display channel's current mode string
-		user->WriteNumeric(RPL_CHANNELMODEIS, targetchannel->name, (std::string("+") + targetchannel->ChanModes(targetchannel->HasUser(user))));
+		Numeric::Numeric modenum(RPL_CHANNELMODEIS);
+		modenum.push(targetchannel->name);
+		GetModeList(modenum, targetchannel, user);
+		user->WriteNumeric(modenum);
 		user->WriteNumeric(RPL_CHANNELCREATED, targetchannel->name, (unsigned long)targetchannel->age);
 	}
 	else
@@ -175,3 +255,22 @@ void CommandMode::DisplayCurrentModes(User* user, User* targetuser, Channel* tar
 		}
 	}
 }
+
+class CoreModMode : public Module
+{
+ private:
+	CommandMode cmdmode;
+
+ public:
+	CoreModMode()
+		: cmdmode(this)
+	{
+	}
+
+	Version GetVersion() CXX11_OVERRIDE
+	{
+		return Version("Provides the MODE command", VF_VENDOR|VF_CORE);
+	}
+};
+
+MODULE_INIT(CoreModMode)

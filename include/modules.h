@@ -107,7 +107,7 @@ struct ModResult {
  * and numerical comparisons in preprocessor macros if they wish to support
  * multiple versions of InspIRCd in one file.
  */
-#define INSPIRCD_VERSION_API 1
+#define INSPIRCD_VERSION_API 7
 
 /**
  * This #define allows us to call a method in all
@@ -121,7 +121,8 @@ struct ModResult {
 		_next = _i+1; \
 		try \
 		{ \
-			(*_i)->y x ; \
+			if (!(*_i)->dying) \
+				(*_i)->y x ; \
 		} \
 		catch (CoreException& modexcept) \
 		{ \
@@ -144,7 +145,8 @@ do { \
 		_next = _i+1; \
 		try \
 		{ \
-			v = (*_i)->n args;
+			if (!(*_i)->dying) \
+				v = (*_i)->n args;
 
 #define WHILE_EACH_HOOK(n) \
 		} \
@@ -212,21 +214,21 @@ enum Priority { PRIORITY_FIRST, PRIORITY_LAST, PRIORITY_BEFORE, PRIORITY_AFTER }
  */
 enum Implementation
 {
-	I_OnUserConnect, I_OnUserQuit, I_OnUserDisconnect, I_OnUserJoin, I_OnUserPart,
+	I_OnUserConnect, I_OnUserPreQuit, I_OnUserQuit, I_OnUserDisconnect, I_OnUserJoin, I_OnUserPart,
 	I_OnSendSnotice, I_OnUserPreJoin, I_OnUserPreKick, I_OnUserKick, I_OnOper,
 	I_OnUserPreInvite, I_OnUserInvite, I_OnUserPreMessage, I_OnUserPreNick,
 	I_OnUserPostMessage, I_OnUserMessageBlocked, I_OnMode,
-	I_OnDecodeMetaData, I_OnAcceptConnection, I_OnUserInit,
+	I_OnDecodeMetaData, I_OnAcceptConnection, I_OnUserInit, I_OnUserPostInit,
 	I_OnChangeHost, I_OnChangeRealName, I_OnAddLine, I_OnDelLine, I_OnExpireLine,
 	I_OnUserPostNick, I_OnPreMode, I_On005Numeric, I_OnKill, I_OnLoadModule,
 	I_OnUnloadModule, I_OnBackgroundTimer, I_OnPreCommand, I_OnCheckReady, I_OnCheckInvite,
 	I_OnRawMode, I_OnCheckKey, I_OnCheckLimit, I_OnCheckBan, I_OnCheckChannelBan, I_OnExtBanCheck,
-	I_OnPreChangeHost, I_OnPreTopicChange,
+	I_OnPreChangeHost, I_OnPreTopicChange, I_OnConnectionFail,
 	I_OnPostTopicChange, I_OnPostConnect, I_OnPostDeoper,
 	I_OnPreChangeRealName, I_OnUserRegister, I_OnChannelPreDelete, I_OnChannelDelete,
 	I_OnPostOper, I_OnPostCommand, I_OnPostJoin,
 	I_OnBuildNeighborList, I_OnGarbageCollect, I_OnSetConnectClass,
-	I_OnUserMessage, I_OnPassCompare, I_OnNamesListItem, I_OnNumeric,
+	I_OnUserMessage, I_OnPassCompare, I_OnNumeric,
 	I_OnPreRehash, I_OnModuleRehash, I_OnChangeIdent, I_OnSetUserIP,
 	I_OnServiceAdd, I_OnServiceDel, I_OnUserWrite,
 	I_END
@@ -304,6 +306,16 @@ class CoreExport Module : public classbase, public usecountbase
 	 * @param user The user who is connecting
 	 */
 	virtual void OnUserConnect(LocalUser* user);
+
+	/** Called when before a user quits.
+	 * The details of the exiting user are available to you in the parameter User *user
+	 * This event is only called when the user is fully registered when they quit. To catch
+	 * raw disconnections, use the OnUserDisconnect method.
+	 * @param user The user who is quitting
+	 * @param message The user's quit message (as seen by non-opers)
+	 * @param oper_message The user's quit message (as seen by opers)
+	 */
+	virtual ModResult OnUserPreQuit(LocalUser* user, std::string& message, std::string& oper_message);
 
 	/** Called when a user quits.
 	 * The details of the exiting user are available to you in the parameter User *user
@@ -722,10 +734,19 @@ class CoreExport Module : public classbase, public usecountbase
 	 */
 	virtual void OnPostCommand(Command* command, const CommandBase::Params& parameters, LocalUser* user, CmdResult result, bool loop);
 
-	/** Called when a user is first connecting, prior to starting DNS lookups, checking initial
-	 * connect class, or accepting any commands.
+	/** Called after a user object is initialised and added to the user list.
+	 * When this is called the user has not had their I/O hooks checked or had their initial
+	 * connect class assigned and may not yet have a serialiser. You probably want to use
+	 * the OnUserPostInit or OnUserSetIP hooks instead of this one.
+	 * @param user The connecting user.
 	 */
 	virtual void OnUserInit(LocalUser* user);
+
+	/** Called after a user object has had their I/O hooks checked, their initial connection
+	 * class assigned, and had a serialiser set.
+	 * @param user The connecting user.
+	 */
+	virtual void OnUserPostInit(LocalUser* user);
 
 	/** Called to check if a user who is connecting can now be allowed to register
 	 * If any modules return false for this function, the user is held in the waiting
@@ -896,25 +917,6 @@ class CoreExport Module : public classbase, public usecountbase
 	 */
 	virtual ModResult OnSetConnectClass(LocalUser* user, ConnectClass* myclass);
 
-#ifdef INSPIRCD_ENABLE_TESTSUITE
-	/** Add test suite hooks here. These are used for testing functionality of a module
-	 * via the --testsuite debugging parameter.
-	 */
-	virtual void OnRunTestSuite();
-#endif
-
-	/** Called for every item in a NAMES list, so that modules may reformat portions of it as they see fit.
-	 * For example NAMESX, channel mode +u and +I, and UHNAMES.
-	 * @param issuer The user who is going to receive the NAMES list being built
-	 * @param item The channel member being considered for inclusion
-	 * @param prefixes The prefix character(s) to display, initially set to the prefix char of the most powerful
-	 * prefix mode the member has, can be changed
-	 * @param nick The nick to display, initially set to the member's nick, can be changed
-	 * @return Return MOD_RES_PASSTHRU to allow the member to be displayed, MOD_RES_DENY to cause them to be
-	 * excluded from this NAMES list
-	 */
-	virtual ModResult OnNamesListItem(User* issuer, Membership* item, std::string& prefixes, std::string& nick);
-
 	virtual ModResult OnNumeric(User* user, const Numeric::Numeric& numeric);
 
 	/** Called whenever a local user's IP is set for the first time, or when a local user's IP changes due to
@@ -933,7 +935,21 @@ class CoreExport Module : public classbase, public usecountbase
 	 */
 	virtual void OnServiceDel(ServiceProvider& service);
 
+	/** Called whenever a message is about to be written to a user.
+	 * @param user The user who is having a message sent to them.
+	 * @param msg The message which is being written to the user.
+	 * @return MOD_RES_ALLOW to explicitly allow the message to be sent, MOD_RES_DENY to explicitly
+	 * deny the message from being sent, or MOD_RES_PASSTHRU to let another module handle the event.
+	 */
 	virtual ModResult OnUserWrite(LocalUser* user, ClientProtocol::Message& msg);
+
+	/** Called when a user connection has been unexpectedly disconnected.
+	 * @param user The user who has been unexpectedly disconnected.
+	 * @param error The type of error which caused this connection failure.
+	 * @return MOD_RES_ALLOW to explicitly retain the user as a zombie, MOD_RES_DENY to explicitly
+	 * disconnect the user, or MOD_RES_PASSTHRU to let another module handle the event.
+	 */
+	virtual ModResult OnConnectionFail(LocalUser* user, BufferedSocketError error);
 };
 
 /** ModuleManager takes care of all things module-related
@@ -984,7 +1000,7 @@ class CoreExport ModuleManager : public fakederef<ModuleManager>
 	Module::List EventHandlers[I_END];
 
 	/** List of data services keyed by name */
-	std::multimap<std::string, ServiceProvider*> DataProviders;
+	std::multimap<std::string, ServiceProvider*, irc::insensitive_swo> DataProviders;
 
 	/** A list of ServiceProviders waiting to be registered.
 	 * Non-NULL when constructing a Module, NULL otherwise.

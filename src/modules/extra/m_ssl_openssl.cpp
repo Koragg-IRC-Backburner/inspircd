@@ -24,6 +24,7 @@
 /// $CompilerFlags: find_compiler_flags("openssl")
 /// $LinkerFlags: find_linker_flags("openssl" "-lssl -lcrypto")
 
+/// $PackageInfo: require_system("arch") openssl pkgconf
 /// $PackageInfo: require_system("centos") openssl-devel pkgconfig
 /// $PackageInfo: require_system("darwin") openssl pkg-config
 /// $PackageInfo: require_system("debian") libssl-dev openssl pkg-config
@@ -33,6 +34,10 @@
 #include "inspircd.h"
 #include "iohook.h"
 #include "modules/ssl.h"
+
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+#endif
 
 // Ignore OpenSSL deprecation warnings on OS X Lion and newer.
 #if defined __APPLE__
@@ -49,6 +54,10 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/dh.h>
+
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
 #ifdef _WIN32
 # pragma comment(lib, "ssleay32.lib")
@@ -336,13 +345,28 @@ namespace OpenSSL
 		{
 			long setoptions = tag->getInt(ctxname + "setoptions", 0);
 			long clearoptions = tag->getInt(ctxname + "clearoptions", 0);
+
 #ifdef SSL_OP_NO_COMPRESSION
-			if (!tag->getBool("compression", false)) // Disable compression by default
+			// Disable compression by default
+			if (!tag->getBool("compression", false))
 				setoptions |= SSL_OP_NO_COMPRESSION;
 #endif
+
 			// Disable TLSv1.0 by default.
 			if (!tag->getBool("tlsv1", false))
 				setoptions |= SSL_OP_NO_TLSv1;
+
+#ifdef SSL_OP_NO_TLSv1_1
+			// Enable TLSv1.1 by default.
+			if (!tag->getBool("tlsv11", true))
+				setoptions |= SSL_OP_NO_TLSv1_1;
+#endif
+
+#ifdef SSL_OP_NO_TLSv1_2
+			// Enable TLSv1.2 by default.
+			if (!tag->getBool("tlsv12", true))
+				setoptions |= SSL_OP_NO_TLSv1_2;
+#endif
 
 			if (!setoptions && !clearoptions)
 				return; // Nothing to do
@@ -1063,7 +1087,7 @@ class ModuleSSLOpenSSL : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides SSL support for clients", VF_VENDOR);
+		return Version("Provides SSL support via OpenSSL", VF_VENDOR);
 	}
 };
 

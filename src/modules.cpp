@@ -24,13 +24,9 @@
  */
 
 
-#include <iostream>
 #include "inspircd.h"
 #include "exitcodes.h"
-
-#ifndef _WIN32
-	#include <dirent.h>
-#endif
+#include <iostream>
 
 static insp::intrusive_list<dynamic_reference_base>* dynrefs = NULL;
 
@@ -54,11 +50,17 @@ Version::Version(const std::string &desc, int flags, const std::string& linkdata
 
 // These declarations define the behavours of the base class Module (which does nothing at all)
 
-Module::Module() { }
+Module::Module()
+	: ModuleDLLManager(NULL)
+	, dying(false)
+{
+}
+
 CullResult Module::cull()
 {
 	return classbase::cull();
 }
+
 Module::~Module()
 {
 }
@@ -71,6 +73,7 @@ void Module::DetachEvent(Implementation i)
 void		Module::ReadConfig(ConfigStatus& status) { }
 ModResult	Module::OnSendSnotice(char &snomask, std::string &type, const std::string &message) { DetachEvent(I_OnSendSnotice); return MOD_RES_PASSTHRU; }
 void		Module::OnUserConnect(LocalUser*) { DetachEvent(I_OnUserConnect); }
+ModResult	Module::OnUserPreQuit(LocalUser*, std::string&, std::string&) { DetachEvent(I_OnUserPreQuit); return MOD_RES_PASSTHRU; }
 void		Module::OnUserQuit(User*, const std::string&, const std::string&) { DetachEvent(I_OnUserQuit); }
 void		Module::OnUserDisconnect(LocalUser*) { DetachEvent(I_OnUserDisconnect); }
 void		Module::OnUserJoin(Membership*, bool, bool, CUList&) { DetachEvent(I_OnUserJoin); }
@@ -96,6 +99,7 @@ void		Module::OnBackgroundTimer(time_t) { DetachEvent(I_OnBackgroundTimer); }
 ModResult	Module::OnPreCommand(std::string&, CommandBase::Params&, LocalUser*, bool) { DetachEvent(I_OnPreCommand); return MOD_RES_PASSTHRU; }
 void		Module::OnPostCommand(Command*, const CommandBase::Params&, LocalUser*, CmdResult, bool) { DetachEvent(I_OnPostCommand); }
 void		Module::OnUserInit(LocalUser*) { DetachEvent(I_OnUserInit); }
+void		Module::OnUserPostInit(LocalUser*) { DetachEvent(I_OnUserPostInit); }
 ModResult	Module::OnCheckReady(LocalUser*) { DetachEvent(I_OnCheckReady); return MOD_RES_PASSTHRU; }
 ModResult	Module::OnUserRegister(LocalUser*) { DetachEvent(I_OnUserRegister); return MOD_RES_PASSTHRU; }
 ModResult	Module::OnUserPreKick(User*, Membership*, const std::string&) { DetachEvent(I_OnUserPreKick); return MOD_RES_PASSTHRU; }
@@ -130,17 +134,13 @@ void		Module::OnBuildNeighborList(User*, IncludeChanList&, std::map<User*,bool>&
 void		Module::OnGarbageCollect() { DetachEvent(I_OnGarbageCollect); }
 ModResult	Module::OnSetConnectClass(LocalUser* user, ConnectClass* myclass) { DetachEvent(I_OnSetConnectClass); return MOD_RES_PASSTHRU; }
 void 		Module::OnUserMessage(User*, const MessageTarget&, const MessageDetails&) { DetachEvent(I_OnUserMessage); }
-ModResult	Module::OnNamesListItem(User*, Membership*, std::string&, std::string&) { DetachEvent(I_OnNamesListItem); return MOD_RES_PASSTHRU; }
 ModResult	Module::OnNumeric(User*, const Numeric::Numeric&) { DetachEvent(I_OnNumeric); return MOD_RES_PASSTHRU; }
 ModResult   Module::OnAcceptConnection(int, ListenSocket*, irc::sockets::sockaddrs*, irc::sockets::sockaddrs*) { DetachEvent(I_OnAcceptConnection); return MOD_RES_PASSTHRU; }
 void		Module::OnSetUserIP(LocalUser*) { DetachEvent(I_OnSetUserIP); }
 void		Module::OnServiceAdd(ServiceProvider&) { DetachEvent(I_OnServiceAdd); }
 void		Module::OnServiceDel(ServiceProvider&) { DetachEvent(I_OnServiceDel); }
 ModResult	Module::OnUserWrite(LocalUser*, ClientProtocol::Message&) { DetachEvent(I_OnUserWrite); return MOD_RES_PASSTHRU; }
-
-#ifdef INSPIRCD_ENABLE_TESTSUITE
-void		Module::OnRunTestSuite() { }
-#endif
+ModResult	Module::OnConnectionFail(LocalUser*, BufferedSocketError) { DetachEvent(I_OnConnectionFail); return MOD_RES_PASSTHRU; }
 
 ServiceProvider::ServiceProvider(Module* Creator, const std::string& Name, ServiceType Type)
 	: creator(Creator), name(Name), service(Type)
@@ -465,6 +465,7 @@ void ModuleManager::LoadAll()
 	std::map<std::string, ServiceList> servicemap;
 	LoadCoreModules(servicemap);
 
+	// Step 1: load all of the modules.
 	ConfigTagList tags = ServerInstance->Config->ConfTags("module");
 	for (ConfigIter i = tags.first; i != tags.second; ++i)
 	{
@@ -485,8 +486,7 @@ void ModuleManager::LoadAll()
 		}
 	}
 
-	ConfigStatus confstatus;
-
+	// Step 2: initialize the modules and register their services.
 	for (ModuleMap::const_iterator i = Modules.begin(); i != Modules.end(); ++i)
 	{
 		Module* mod = i->second;
@@ -496,7 +496,6 @@ void ModuleManager::LoadAll()
 			AttachAll(mod);
 			AddServices(servicemap[i->first]);
 			mod->init();
-			mod->ReadConfig(confstatus);
 		}
 		catch (CoreException& modexcept)
 		{
@@ -508,6 +507,27 @@ void ModuleManager::LoadAll()
 	}
 
 	this->NewServices = NULL;
+	ConfigStatus confstatus(NULL, true);
+
+	// Step 3: Read the configuration for the modules. This must be done as part of
+	// its own step so that services provided by modules can be registered before
+	// the configuration is read.
+	for (ModuleMap::const_iterator i = Modules.begin(); i != Modules.end(); ++i)
+	{
+		Module* mod = i->second;
+		try
+		{
+			ServerInstance->Logs->Log("MODULE", LOG_DEBUG, "Reading configuration for %s", i->first.c_str());
+			mod->ReadConfig(confstatus);
+		}
+		catch (CoreException& modexcept)
+		{
+			LastModuleError = "Unable to read the configuration for " + mod->ModuleSourceFile + ": " + modexcept.GetReason();
+			ServerInstance->Logs->Log("MODULE", LOG_DEFAULT, LastModuleError);
+			std::cout << std::endl << "[" << con_red << "*" << con_reset << "] " << LastModuleError << std::endl << std::endl;
+			ServerInstance->Exit(EXIT_STATUS_CONFIG);
+		}
+	}
 
 	if (!PrioritizeHooks())
 		ServerInstance->Exit(EXIT_STATUS_MODULE);

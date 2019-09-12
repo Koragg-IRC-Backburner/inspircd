@@ -20,6 +20,7 @@
 /// $CompilerFlags: find_compiler_flags("re2" "")
 /// $LinkerFlags: find_linker_flags("re2" "-lre2")
 
+/// $PackageInfo: require_system("arch") pkgconf re2
 /// $PackageInfo: require_system("darwin") pkg-config re2
 /// $PackageInfo: require_system("debian" "8.0") libre2-dev pkg-config
 /// $PackageInfo: require_system("ubuntu" "15.10") libre2-dev pkg-config
@@ -27,6 +28,10 @@
 
 #include "inspircd.h"
 #include "modules/regex.h"
+
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+#endif
 
 // Fix warnings about the use of `long long` on C++03 and
 // shadowing on GCC.
@@ -38,6 +43,10 @@
 #endif
 
 #include <re2/re2.h>
+
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
 class RE2Regex : public Regex
 {

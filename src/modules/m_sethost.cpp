@@ -32,7 +32,7 @@ class CommandSethost : public Command
 		: Command(Creator,"SETHOST", 1)
 	{
 		allow_empty_last_param = false;
-		flags_needed = 'o'; syntax = "<new-hostname>";
+		flags_needed = 'o'; syntax = "<host>";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -84,7 +84,7 @@ class ModuleSetHost : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for the SETHOST command", VF_VENDOR);
+		return Version("Provides the SETHOST command", VF_VENDOR);
 	}
 };
 

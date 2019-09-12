@@ -22,6 +22,7 @@
 /// $CompilerFlags: find_compiler_flags("sqlite3")
 /// $LinkerFlags: find_linker_flags("sqlite3" "-lsqlite3")
 
+/// $PackageInfo: require_system("arch") pkgconf sqlite
 /// $PackageInfo: require_system("centos") pkgconfig sqlite-devel
 /// $PackageInfo: require_system("darwin") pkg-config sqlite3
 /// $PackageInfo: require_system("debian") libsqlite3-dev pkg-config
@@ -29,6 +30,10 @@
 
 #include "inspircd.h"
 #include "modules/sql.h"
+
+#ifdef __GNUC__
+# pragma GCC diagnostic push
+#endif
 
 // Fix warnings about the use of `long long` on C++03.
 #if defined __clang__
@@ -38,6 +43,10 @@
 #endif
 
 #include <sqlite3.h>
+
+#ifdef __GNUC__
+# pragma GCC diagnostic pop
+#endif
 
 #ifdef _WIN32
 # pragma comment(lib, "sqlite3.lib")
@@ -174,6 +183,7 @@ class SQLConn : public SQL::Provider
 
 	void Submit(SQL::Query* query, const std::string& q) CXX11_OVERRIDE
 	{
+		ServerInstance->Logs->Log(MODNAME, LOG_DEBUG, "Executing SQLite3 query: " + q);
 		Query(query, q);
 		delete query;
 	}
@@ -264,7 +274,7 @@ class ModuleSQLite3 : public Module
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("sqlite3 provider", VF_VENDOR);
+		return Version("Provides SQLite3 support", VF_VENDOR);
 	}
 };
 

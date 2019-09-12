@@ -74,7 +74,7 @@ class CommandTitle : public Command
 	CommandTitle(Module* Creator) : Command(Creator,"TITLE", 2),
 		ctitle("ctitle", ExtensionItem::EXT_USER, Creator)
 	{
-		syntax = "<user> <password>";
+		syntax = "<username> <password>";
 	}
 
 	CmdResult Handle(User* user, const Params& parameters) CXX11_OVERRIDE
@@ -160,7 +160,7 @@ class ModuleCustomTitle : public Module, public Whois::LineEventListener
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Custom Title for users", VF_OPTCOMMON | VF_VENDOR);
+		return Version("Provides the TITLE command, custom titles for users", VF_OPTCOMMON | VF_VENDOR);
 	}
 };
 

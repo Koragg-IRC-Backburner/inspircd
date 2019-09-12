@@ -29,7 +29,7 @@ class CommandChgname : public Command
 	{
 		allow_empty_last_param = false;
 		flags_needed = 'o';
-		syntax = "<nick> <new real name>";
+		syntax = "<nick> :<realname>";
 		TRANSLATE2(TR_NICK, TR_TEXT);
 	}
 
@@ -81,7 +81,7 @@ public:
 
 	Version GetVersion() CXX11_OVERRIDE
 	{
-		return Version("Provides support for the CHGNAME command", VF_OPTCOMMON | VF_VENDOR);
+		return Version("Provides the CHGNAME command", VF_OPTCOMMON | VF_VENDOR);
 	}
 };
 
